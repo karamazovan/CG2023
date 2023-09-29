@@ -1,1 +1,1 @@
-# CG2023
+# Computer Graphics 2023
