@@ -1,3 +1,4 @@
+#include <CanvasPoint.h>
 #include <CanvasTriangle.h>
 #include <DrawingWindow.h>
 #include <Utils.h>
@@ -36,22 +37,59 @@ std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 t
     return result;
 }
 
-
+// function to convert glm::vec3 to uint32_t
+uint32_t colourPalette(glm::vec3 col) {
+    return (255 << 24) + (int(col.r) << 16) + (int(col.g) << 8) + int(col.b);
+}
 
 void draw(DrawingWindow &window) {
 	window.clearPixels();
+
+	// Task 5: Two Dimensional Colour Interpolation
+    glm::vec3 topLeft(255, 0, 0);        // red
+    glm::vec3 topRight(0, 0, 255);       // blue
+    glm::vec3 bottomRight(0, 255, 0);    // green
+    glm::vec3 bottomLeft(255, 255, 0);   // yellow
+
+    // Interpolate colours for the left and right columns
+    std::vector<glm::vec3> leftMostColumn = interpolateThreeElementValues(topLeft, bottomLeft, window.height);
+    std::vector<glm::vec3> rightMostColumn = interpolateThreeElementValues(topRight, bottomRight, window.height);
+
 	for (size_t y = 0; y < window.height; y++) {
+	    // Interpolate colours for each current row
+	    std::vector<glm::vec3> eachRowColours = interpolateThreeElementValues(leftMostColumn[y], rightMostColumn[y], window.width);
 		for (size_t x = 0; x < window.width; x++) {
-		    // Use the x-coordinate as the intensity for a left-to-right gradient
+		    // Convert glm::vec3 colour to uint32_t
+		    uint32_t pixelColour = colourPalette(glm::vec3(eachRowColours[x]));
+			// Set the pixel colour using the converted colour
+			window.setPixelColour(x, y, pixelColour);
+		/*
+            // Task 3: Single Dimension Greyscale Interpolation
+            // Use the x-coordinate as the intensity for a left-to-right gradient
             float grayScale = static_cast<float>(x) / window.width * 255.0;
             // Invert a gradient from white to black
             grayScale = 255.0 - grayScale;
-		    // Pack RBG channels into a 32-bit integer
-		    uint32_t colour = (255 << 24) + (int(grayScale) << 16) + (int(grayScale) << 8) + int(grayScale);
-			window.setPixelColour(x, y, colour);
+        	// Pack RBG channels into a 32-bit integer
+        	uint32_t colour = (255 << 24) + (int(grayScale) << 16) + (int(grayScale) << 8) + int(grayScale);
+        	window.setPixelColour(x, y, colour);
+        */
 		}
 	}
 }
+
+/*
+// Implementing Line Drawing, Basically a linear sequence of pixels
+float xDiff = toX - fromX;
+float yDiff = toY - fromY;
+float numberOfSteps = max(abs(xDiff), abs(yDiff));
+float xStepSize = xDiff/numberOfSteps;
+float yStepSize = yDiff/numberOfSteps;
+for (float i=0.0; i<=numberOfSteps; i++) {
+  float x = fromX + (xStepSize*i);
+  float y = fromY + (yStepSize*i);
+  display.setPixelColour(round(x), round(y), BLACK);
+}
+*/
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
