@@ -3,9 +3,31 @@
 #include <Utils.h>
 #include <fstream>
 #include <vector>
+#include <glm/glm.hpp>
 
 #define WIDTH 320
 #define HEIGHT 240
+
+std::vector<float> interpolateSingleFloats (float from, float to, size_t numberOfValues) {
+    std::vector<float> result;
+    if (numberOfValues == 0 ) {
+        result.push_back(from);
+        return result;
+    }
+    float betweenValue = (to - from) / (numberOfValues - 1);
+    for (int i = 0; i < numberOfValues; i++) {
+        result.push_back(from + i * betweenValue);
+    }
+    return result;
+}
+
+/*
+vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, size_t numberOfVectors) {
+    std::vector<glm::vec3> result;
+    return result;
+}
+*/
+
 
 void draw(DrawingWindow &window) {
 	window.clearPixels();
@@ -34,6 +56,12 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 
 int main(int argc, char *argv[]) {
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
+	std::vector<float> result;
+    result = interpolateSingleFloats(2.2, 8.5, 7);
+	for (size_t i = 0; i < result.size(); i++) {
+	    std::cout << result[i] << " ";
+	}
+    std::cout << std::endl;
 	SDL_Event event;
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
