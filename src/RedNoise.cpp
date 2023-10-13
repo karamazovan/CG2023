@@ -36,7 +36,8 @@ void draw(DrawingWindow &window) {
 		for (size_t x = 0; x < window.width; x++) {
 		    // Use the x-coordinate as the intensity for a left-to-right gradient
             float grayScale = static_cast<float>(x) / window.width * 255.0;
-
+            // Invert a gradient from white to black
+            grayScale = 255.0 - grayScale;
 		    // Pack RBG channels into a 32-bit integer
 		    uint32_t colour = (255 << 24) + (int(grayScale) << 16) + (int(grayScale) << 8) + int(grayScale);
 			window.setPixelColour(x, y, colour);
