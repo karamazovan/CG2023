@@ -31,12 +31,21 @@ vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, si
 
 void draw(DrawingWindow &window) {
 	window.clearPixels();
+
 	for (size_t y = 0; y < window.height; y++) {
 		for (size_t x = 0; x < window.width; x++) {
+		    float grayScale = rand() % 256;
+		    // Pack RBG channels into a 32-bit integer
+		    uint32_t colour = (255 << 24) + (int(grayScale) << 16) + (int(grayScale) << 8) + int(grayScale);
+
+			/*
+			// week 1
 			float red = rand() % 256;
 			float green = 0.0;
 			float blue = 0.0;
 			uint32_t colour = (255 << 24) + (int(red) << 16) + (int(green) << 8) + int(blue);
+			*/
+
 			window.setPixelColour(x, y, colour);
 		}
 	}
