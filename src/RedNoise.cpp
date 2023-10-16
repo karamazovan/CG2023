@@ -46,6 +46,13 @@ Colour randomColour() {
     return Colour(rand() % 256, rand() % 256, rand() % 256);
 }
 
+CanvasTriangle randomLines() {
+    CanvasPoint v0 = CanvasPoint(rand() % WIDTH, rand() % HEIGHT);
+    CanvasPoint v1 = CanvasPoint(rand() % WIDTH, rand() % HEIGHT);
+    CanvasPoint v2 = CanvasPoint(rand() % WIDTH, rand() % HEIGHT);
+    return CanvasTriangle(v0, v1, v2);
+}
+
 void drawLine(CanvasPoint from, CanvasPoint to, DrawingWindow &window, Colour colour) {
     uint32_t colourSet = colourPalette(colour);
     float xDiff = to.x - from.x;
@@ -67,13 +74,13 @@ void drawTriangle(CanvasTriangle triangle, DrawingWindow &window, Colour colour)
 }
 
 void drawRandomTriangle(DrawingWindow &window) {
-    CanvasPoint v0(rand() % window.width, rand() % window.height);
-    CanvasPoint v1(rand() % window.width, rand() % window.height);
-    CanvasPoint v2(rand() % window.width, rand() % window.height);
-    CanvasTriangle triangle(v0, v1, v2);
-    drawTriangle(triangle, window, randomColour());
+    drawTriangle(randomLines(), window, randomColour()) ;
 }
 
+void draw(DrawingWindow &window) {
+}
+
+/*
 // Grayscale
 void draw(DrawingWindow &window) {
 	window.clearPixels();
@@ -88,6 +95,7 @@ void draw(DrawingWindow &window) {
 		}
 	}
 }
+*/
 
 /*
 Week2
@@ -146,6 +154,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		else if (event.key.keysym.sym == SDLK_DOWN) std::cout << "DOWN" << std::endl;
 		else if (event.key.keysym.sym == SDLK_u) {
 		    drawRandomTriangle(window);
+		    window.renderFrame();
 		}
 		/*
 		else if (event.key.keysym.sym == SLDK_f) {
