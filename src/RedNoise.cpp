@@ -97,6 +97,20 @@ void drawLine(CanvasPoint from, CanvasPoint to, DrawingWindow &window, Colour co
     }
 }
 
+void drawTriangle(CanvasTriangle triangle, DrawingWindow& window, Colour colour) {
+    drawLine(triangle.v0(), triangle.v1(), window, colour);
+    drawLine(triangle.v1(), triangle.v2(), window, colour);
+    drawLine(triangle.v2(), triangle.v0(), window, colour);
+}
+
+void drawRandomTriangle(DrawingWindow &window) {
+    CanvasPoint v0(rand() % window.width, rand() % window.height);
+    CanvasPoint v1(rand() % window.width, rand() % window.height);
+    CanvasPoint v2(rand() % window.width, rand() % window.height);
+    CanvasTriangle triangle(v0, v1, v2);
+    drawTriangle(triangle, window, randomColour());
+}
+
 void draw(DrawingWindow &window) {
 	window.clearPixels();
 	Colour white = Colour(255, 255, 255);
@@ -106,16 +120,19 @@ void draw(DrawingWindow &window) {
     drawLine(CanvasPoint(window.width / 3, window.height / 2), CanvasPoint(2 * window.width / 3, window.height / 2), window, white);
 }
 
-
 void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
 		if (event.key.keysym.sym == SDLK_LEFT) std::cout << "LEFT" << std::endl;
 		else if (event.key.keysym.sym == SDLK_RIGHT) std::cout << "RIGHT" << std::endl;
 		else if (event.key.keysym.sym == SDLK_UP) std::cout << "UP" << std::endl;
 		else if (event.key.keysym.sym == SDLK_DOWN) std::cout << "DOWN" << std::endl;
+		else if (event.key.keysym.sym == SDLK_u) {
+		    drawRandomTriangle(window);
+		    window.renderFrame();
+		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
-		window.savePPM("output.ppm");
-		window.saveBMP("output.bmp");
+	    window.savePPM("output.ppm");
+	    window.saveBMP("output.bmp");
 	}
 }
 
