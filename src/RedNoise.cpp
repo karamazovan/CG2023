@@ -93,18 +93,21 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, DrawingWindow &w
     float slope1 = (triangle.v1().x - triangle.v0().x) / (triangle.v1().y - triangle.v0().y);
     float slope2 = (triangle.v2().x - triangle.v0().x) / (triangle.v2().y - triangle.v0().y);
 
+    float xStartLeft = triangle.v0().x;
+    float xStartRight = triangle.v0().x;
+
     // Draw the triangle
     for (int y = triangle.v0().y; y <= triangle.v2().y; y++) {
-        int xStart = triangle.v0().x + (y - triangle.v0().y) * slope1;
-        int xEnd = triangle.v0().x + (y - triangle.v0().y) * slope2;
-           // Fill the row with the colour
-           for (int x = xStart; x <= xEnd; x++) {
-               window.setPixelColour(x, y, colourPalette(colour));
-           }
-       }
-       Colour white = Colour(255, 255, 255);
+        for (int x = std::round(xStartLeft); x <= std::round(xStartRight); x++) {
+            window.setPixelColour(x, y, colourPalette(colour));
+        }
+
+        xStartLeft += slope1;
+        xStartRight += slope2;
+    }
+       Colour whiteLines = Colour(255, 255, 255);
        // Draw the stroked white triangle
-       drawTriangle(triangle, white, window);
+       drawTriangle(triangle, whiteLines, window);
 }
 
 void draw(DrawingWindow &window) {
