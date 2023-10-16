@@ -18,7 +18,7 @@ std::vector<float> interpolateSingleFloats (float from, float to, size_t numberO
         return result;
     }
     float betweenValue = (to - from) / float (numberOfValues - 1);
-    for (int i = 0; i < numberOfValues; i++) {
+    for (size_t i = 0; i < numberOfValues; i++) {
         result.push_back(from + i * betweenValue);
     }
     return result;
@@ -61,9 +61,11 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &wi
     float xStepSize = xDiff / numberOfSteps;
     float yStepSize = yDiff / numberOfSteps;
     for (float i= 0.0; i <= numberOfSteps; i++) {
-      float x = from.x + (xStepSize * i);
-      float y = from.y + (yStepSize * i);
-      window.setPixelColour(round(x), round(y), colourSet);
+        float x = from.x + (xStepSize * i);
+        float y = from.y + (yStepSize * i);
+        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+            window.setPixelColour(round(x), round(y), colourSet);
+        }
     }
 }
 
@@ -78,47 +80,45 @@ void drawRandomTriangle(DrawingWindow &window) {
 }
 
 void triangleRasteriser(CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
-    // Sort vertices by vertical position from top to bottom
-    if (triangle.v0().y > triangle.v1().y) {
-        std::swap(triangle.vertices[0], triangle.vertices[1]);
+    // Sort the vertices by y coordinates
+    if (triangle.v0().y > triangle.v1().y) std::swap(triangle.v0(), triangle.v1());
+    if (triangle.v0().y > triangle.v2().y) std::swap(triangle.v0(), triangle.v2());
+    if (triangle.v1().y > triangle.v2().y) std::swap(triangle.v1(), triangle.v2());
+
+    // Extract the x and y coordinates
+    float x0 = triangle.v0().x;
+    float x1 = triangle.v1().x;
+    float x2 = triangle.v2().x;
+    float y0 = triangle.v0().y;
+    float y1 = triangle.v1().y;
+    float y2 = triangle.v2().y;
+
+    // Calculate slopes
+    float slope01 = (y1 - y0) != 0 ? (x1 - x0) / (y1 - y0) : 0;
+    float slope02 = (y2 - y0) != 0 ? (x2 - x0) / (y2 - y0) : 0;
+    float slope12 = (y2 - y1) != 0 ? (x2 - x1) / (y2 - y1) : 0;
+
+    // the top part of the triangle
+    for (size_t y = y0; y <= y1; y++) {
+        float xStart = x0 + (y - y0) * slope02;
+        float xEnd = x0 + (y - y0) * slope01;
+        drawLine(CanvasPoint(xStart, y), CanvasPoint(xEnd, y), colour, window);
     }
-    if (triangle.v1().y > triangle.v2().y) {
-        std::swap(triangle.vertices[1], triangle.vertices[2]);
-    }
-    if (triangle.v0().y > triangle.v2().y) {
-        std::swap(triangle.vertices[0], triangle.vertices[2]);
-    }
 
-    // Calculate slopes for the two edges of the triangle
-    float slope1 = (triangle.v1().x - triangle.v0().x) / (triangle.v1().y - triangle.v0().y);
-    float slope2 = (triangle.v2().x - triangle.v0().x) / (triangle.v2().y - triangle.v0().y);
-
-    // Draw the top triangle
-    for (int y = triangle.v0().y; y <= triangle.v1().y; y++) {
-        int xStart = triangle.v0().x + (y - triangle.v0().y) * slope1;
-        int xEnd = triangle.v0().x + (y - triangle.v0().y) * slope2;
-
-        for (int x = xStart; x <= xEnd; x++) {
-            window.setPixelColour(x, y, colourPalette(colour));
-        }
+    // the bottom part of the triangle
+    for (size_t y = y1 + 1; y <= y2; y++) {
+        float xStart = x1 + (y - y1) * slope12;
+        float xEnd = x0 + (y - y0) * slope02;
+        drawLine(CanvasPoint(xStart, y), CanvasPoint(xEnd, y), colour, window);
     }
 
-    // Calculate slopes for the new edge of the bottom triangle
-    slope1 = (triangle.v2().x - triangle.v1().x) / (triangle.v2().y - triangle.v1().y);
-
-    // Draw the bottom triangle
-    for (int y = triangle.v1().y; y <= triangle.v2().y; y++) {
-        int xStart = triangle.v1().x + (y - triangle.v1().y) * slope1;
-        int xEnd = triangle.v0().x + (y - triangle.v0().y) * slope2;
-
-        for (int x = xStart; x <= xEnd; x++) {
-            window.setPixelColour(x, y, colourPalette(colour));
-        }
-    }
+    // draw white line
+    Colour whiteLine = Colour(255, 255, 255);
+    drawTriangle(triangle, whiteLine, window);
 }
 
-
 void draw(DrawingWindow &window) {
+
 }
 
 /*
