@@ -77,7 +77,7 @@ void drawRandomTriangle(DrawingWindow &window) {
     drawTriangle(randomLines(), randomColour(), window) ;
 }
 
-void fillTriangle(CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
+void triangleRasteriser(CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
     // Sort vertices by vertical position from top to bottom
     if (triangle.v0().y > triangle.v1().y) {
         std::swap(triangle.vertices[0], triangle.vertices[1]);
@@ -89,16 +89,34 @@ void fillTriangle(CanvasTriangle triangle, Colour colour, DrawingWindow &window)
         std::swap(triangle.vertices[0], triangle.vertices[2]);
     }
 
-    for (int y = triangle.v0().y; y <= triangle.v2().y; y++) {
-        float alpha = (y - triangle.v0().y) / (static_cast<float>(triangle.v2().y - triangle.v0().y));
-        int xStart = triangle.v0().x + alpha * (triangle.v2().x - triangle.v0().x);
-        int xEnd = triangle.v0().x + alpha * (triangle.v1().x - triangle.v0().x);
+    // Calculate slopes for the two edges of the triangle
+    float slope1 = (triangle.v1().x - triangle.v0().x) / (triangle.v1().y - triangle.v0().y);
+    float slope2 = (triangle.v2().x - triangle.v0().x) / (triangle.v2().y - triangle.v0().y);
+
+    // Draw the top triangle
+    for (int y = triangle.v0().y; y <= triangle.v1().y; y++) {
+        int xStart = triangle.v0().x + (y - triangle.v0().y) * slope1;
+        int xEnd = triangle.v0().x + (y - triangle.v0().y) * slope2;
+
+        for (int x = xStart; x <= xEnd; x++) {
+            window.setPixelColour(x, y, colourPalette(colour));
+        }
+    }
+
+    // Calculate slopes for the new edge of the bottom triangle
+    slope1 = (triangle.v2().x - triangle.v1().x) / (triangle.v2().y - triangle.v1().y);
+
+    // Draw the bottom triangle
+    for (int y = triangle.v1().y; y <= triangle.v2().y; y++) {
+        int xStart = triangle.v1().x + (y - triangle.v1().y) * slope1;
+        int xEnd = triangle.v0().x + (y - triangle.v0().y) * slope2;
 
         for (int x = xStart; x <= xEnd; x++) {
             window.setPixelColour(x, y, colourPalette(colour));
         }
     }
 }
+
 
 void draw(DrawingWindow &window) {
 }
@@ -180,8 +198,8 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		    window.renderFrame();
 		}
 		else if (event.key.keysym.sym == SDLK_f) {
-		    fillTriangle(randomLines(), randomColour(), window);
-		    window.renderFrame();
+            triangleRasteriser(randomLines(), randomColour(), window);
+            window.renderFrame();
 		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 	    window.savePPM("output.ppm");
