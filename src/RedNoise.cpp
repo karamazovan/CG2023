@@ -1,5 +1,6 @@
 #include <CanvasPoint.h>
 #include <CanvasTriangle.h>
+#include <Colour.h>
 #include <DrawingWindow.h>
 #include <Utils.h>
 #include <fstream>
@@ -37,11 +38,15 @@ std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 t
     return result;
 }
 
-// function to convert glm::vec3 to uint32_t
-uint32_t colourPalette(glm::vec3 col) {
-    return (255 << 24) + (int(col.r) << 16) + (int(col.g) << 8) + int(col.b);
+uint32_t colourPalette(Colour colour) {
+    return (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 }
 
+Colour randomColour() {
+    return Colour(rand() % 256, rand() % 256, rand() % 256);
+}
+
+/*
 void draw(DrawingWindow &window) {
 	window.clearPixels();
 
@@ -63,7 +68,7 @@ void draw(DrawingWindow &window) {
 		    uint32_t pixelColour = colourPalette(glm::vec3(eachRowColours[x]));
 			// Set the pixel colour using the converted colour
 			window.setPixelColour(x, y, pixelColour);
-		/*
+
             // Task 3: Single Dimension Greyscale Interpolation
             // Use the x-coordinate as the intensity for a left-to-right gradient
             float grayScale = static_cast<float>(x) / window.width * 255.0;
@@ -72,24 +77,35 @@ void draw(DrawingWindow &window) {
         	// Pack RBG channels into a 32-bit integer
         	uint32_t colour = (255 << 24) + (int(grayScale) << 16) + (int(grayScale) << 8) + int(grayScale);
         	window.setPixelColour(x, y, colour);
-        */
 		}
 	}
 }
-
-/*
-// Implementing Line Drawing, Basically a linear sequence of pixels
-float xDiff = toX - fromX;
-float yDiff = toY - fromY;
-float numberOfSteps = max(abs(xDiff), abs(yDiff));
-float xStepSize = xDiff/numberOfSteps;
-float yStepSize = yDiff/numberOfSteps;
-for (float i=0.0; i<=numberOfSteps; i++) {
-  float x = fromX + (xStepSize*i);
-  float y = fromY + (yStepSize*i);
-  display.setPixelColour(round(x), round(y), BLACK);
-}
 */
+
+
+void drawLine(CanvasPoint from, CanvasPoint to, DrawingWindow &window, Colour colour) {
+    uint32_t colourSet = colourPalette(colour);
+    float xDiff = to.x - from.x;
+    float yDiff = to.y - from.y;
+    float numberOfSteps = std::max(abs(xDiff), std::abs(yDiff));
+    float xStepSize = xDiff / numberOfSteps;
+    float yStepSize = yDiff / numberOfSteps;
+    for (float i= 0.0; i <= numberOfSteps; i++) {
+      float x = from.x + (xStepSize * i);
+      float y = from.y + (yStepSize * i);
+      window.setPixelColour(round(x), round(y), colourSet);
+    }
+}
+
+void draw(DrawingWindow &window) {
+	window.clearPixels();
+	Colour white = Colour(255, 255, 255);
+	drawLine(CanvasPoint(0, 0), CanvasPoint(window.width / 2, window.height / 2), window, white);
+    drawLine(CanvasPoint(window.width, 0), CanvasPoint(window.width / 2, window.height / 2), window, white);
+    drawLine(CanvasPoint(window.width / 2, 0), CanvasPoint(window.width / 2, window.height), window, white);
+    drawLine(CanvasPoint(window.width / 3, window.height / 2), CanvasPoint(2 * window.width / 3, window.height / 2), window, white);
+}
+
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
