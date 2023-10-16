@@ -17,7 +17,7 @@ std::vector<float> interpolateSingleFloats (float from, float to, size_t numberO
         result.push_back(from);
         return result;
     }
-    float betweenValue = (to - from) / (numberOfValues - 1);
+    float betweenValue = (to - from) / float (numberOfValues - 1);
     for (int i = 0; i < numberOfValues; i++) {
         result.push_back(from + i * betweenValue);
     }
@@ -77,7 +77,7 @@ void drawRandomTriangle(DrawingWindow &window) {
     drawTriangle(randomLines(), randomColour(), window) ;
 }
 
-void triangleRasteriser(CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
+void fillTriangle(CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
     // Sort vertices by vertical position from top to bottom
     if (triangle.v0().y > triangle.v1().y) {
         std::swap(triangle.vertices[0], triangle.vertices[1]);
@@ -89,25 +89,15 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, DrawingWindow &w
         std::swap(triangle.vertices[0], triangle.vertices[2]);
     }
 
-    // Calculate slopes for the two edges of the triangle
-    float slope1 = (triangle.v1().x - triangle.v0().x) / (triangle.v1().y - triangle.v0().y);
-    float slope2 = (triangle.v2().x - triangle.v0().x) / (triangle.v2().y - triangle.v0().y);
-
-    float xStartLeft = triangle.v0().x;
-    float xStartRight = triangle.v0().x;
-
-    // Draw the triangle
     for (int y = triangle.v0().y; y <= triangle.v2().y; y++) {
-        for (int x = std::round(xStartLeft); x <= std::round(xStartRight); x++) {
+        float alpha = (y - triangle.v0().y) / (static_cast<float>(triangle.v2().y - triangle.v0().y));
+        int xStart = triangle.v0().x + alpha * (triangle.v2().x - triangle.v0().x);
+        int xEnd = triangle.v0().x + alpha * (triangle.v1().x - triangle.v0().x);
+
+        for (int x = xStart; x <= xEnd; x++) {
             window.setPixelColour(x, y, colourPalette(colour));
         }
-
-        xStartLeft += slope1;
-        xStartRight += slope2;
     }
-       Colour whiteLines = Colour(255, 255, 255);
-       // Draw the stroked white triangle
-       drawTriangle(triangle, whiteLines, window);
 }
 
 void draw(DrawingWindow &window) {
@@ -190,7 +180,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		    window.renderFrame();
 		}
 		else if (event.key.keysym.sym == SDLK_f) {
-		    triangleRasteriser(randomLines(), randomColour(), window);
+		    fillTriangle(randomLines(), randomColour(), window);
 		    window.renderFrame();
 		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
