@@ -53,7 +53,7 @@ CanvasTriangle randomLines() {
     return CanvasTriangle(v0, v1, v2);
 }
 
-void drawLine(CanvasPoint from, CanvasPoint to, DrawingWindow &window, Colour colour) {
+void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &window) {
     uint32_t colourSet = colourPalette(colour);
     float xDiff = to.x - from.x;
     float yDiff = to.y - from.y;
@@ -67,14 +67,44 @@ void drawLine(CanvasPoint from, CanvasPoint to, DrawingWindow &window, Colour co
     }
 }
 
-void drawTriangle(CanvasTriangle triangle, DrawingWindow &window, Colour colour) {
-    drawLine(triangle.v0(), triangle.v1(), window, colour);
-    drawLine(triangle.v1(), triangle.v2(), window, colour);
-    drawLine(triangle.v2(), triangle.v0(), window, colour);
+void drawTriangle(CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
+    drawLine(triangle.v0(), triangle.v1(), colour, window);
+    drawLine(triangle.v1(), triangle.v2(), colour, window);
+    drawLine(triangle.v2(), triangle.v0(), colour, window);
 }
 
 void drawRandomTriangle(DrawingWindow &window) {
-    drawTriangle(randomLines(), window, randomColour()) ;
+    drawTriangle(randomLines(), randomColour(), window) ;
+}
+
+void triangleRasteriser(CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
+    // Sort vertices by vertical position from top to bottom
+    if (triangle.v0().y > triangle.v1().y) {
+        std::swap(triangle.vertices[0], triangle.vertices[1]);
+    }
+    if (triangle.v1().y > triangle.v2().y) {
+        std::swap(triangle.vertices[1], triangle.vertices[2]);
+    }
+    if (triangle.v0().y > triangle.v2().y) {
+        std::swap(triangle.vertices[0], triangle.vertices[2]);
+    }
+
+    // Calculate slopes for the two edges of the triangle
+    float slope1 = (triangle.v1().x - triangle.v0().x) / (triangle.v1().y - triangle.v0().y);
+    float slope2 = (triangle.v2().x - triangle.v0().x) / (triangle.v2().y - triangle.v0().y);
+
+    // Draw the triangle
+    for (int y = triangle.v0().y; y <= triangle.v2().y; y++) {
+        int xStart = triangle.v0().x + (y - triangle.v0().y) * slope1;
+        int xEnd = triangle.v0().x + (y - triangle.v0().y) * slope2;
+           // Fill the row with the colour
+           for (int x = xStart; x <= xEnd; x++) {
+               window.setPixelColour(x, y, colourPalette(colour));
+           }
+       }
+       Colour white = Colour(255, 255, 255);
+       // Draw the stroked white triangle
+       drawTriangle(triangle, white, window);
 }
 
 void draw(DrawingWindow &window) {
@@ -156,11 +186,10 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		    drawRandomTriangle(window);
 		    window.renderFrame();
 		}
-		/*
-		else if (event.key.keysym.sym == SLDK_f) {
-
+		else if (event.key.keysym.sym == SDLK_f) {
+		    triangleRasteriser(randomLines(), randomColour(), window);
+		    window.renderFrame();
 		}
-		*/
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 	    window.savePPM("output.ppm");
 	    window.saveBMP("output.bmp");
