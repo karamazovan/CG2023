@@ -2,11 +2,14 @@
 #include <CanvasTriangle.h>
 #include <Colour.h>
 #include <DrawingWindow.h>
+#include <TextureMap.h>
+#include <TexturePoint.h>
 #include <Utils.h>
 #include <fstream>
 #include <iostream>
 #include <vector>
 #include <glm/glm.hpp>
+#include <algorithm>
 
 #define WIDTH 320
 #define HEIGHT 240
@@ -17,9 +20,9 @@ std::vector<float> interpolateSingleFloats (float from, float to, size_t numberO
         result.push_back(from);
         return result;
     }
-    float betweenValue = (to - from) / float (numberOfValues - 1);
+    float betweenValue = (to - from) / float(numberOfValues - 1);
     for (size_t i = 0; i < numberOfValues; i++) {
-        result.push_back(from + i * betweenValue);
+        result.push_back(from + float(i) * betweenValue);
     }
     return result;
 }
@@ -33,7 +36,7 @@ std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 t
     }
     glm::vec3 betweenValue = (to - from) / glm::vec3(numberOfVectors - 1);
     for (size_t i = 0; i < numberOfVectors; i++) {
-        result.push_back(from + glm::vec3(i) * betweenValue);
+        result.push_back(from + betweenValue * glm::vec3(i));
     }
     return result;
 }
@@ -121,72 +124,6 @@ void draw(DrawingWindow &window) {
 
 }
 
-/*
-// Grayscale
-void draw(DrawingWindow &window) {
-	window.clearPixels();
-	std::vector<float> grayscale = interpolateSingleFloats(255, 0, WIDTH);
-	for (size_t y = 0; y < window.height; y++) {
-		for (size_t x = 0; x < window.width; x++) {
-			float red = grayscale[x];
-			float green = grayscale[x];
-			float blue = grayscale[x];
-			uint32_t colour = (255 << 24) + (int(red) << 16) + (int(green) << 8) + int(blue);
-			window.setPixelColour(x, y, colour);
-		}
-	}
-}
-*/
-
-/*
-Week2
-void draw(DrawingWindow &window) {
-	window.clearPixels();
-
-	// Task 5: Two Dimensional Colour Interpolation
-    glm::vec3 topLeft(255, 0, 0);        // red
-    glm::vec3 topRight(0, 0, 255);       // blue
-    glm::vec3 bottomRight(0, 255, 0);    // green
-    glm::vec3 bottomLeft(255, 255, 0);   // yellow
-
-    // Interpolate colours for the left and right columns
-    std::vector<glm::vec3> leftMostColumn = interpolateThreeElementValues(topLeft, bottomLeft, window.height);
-    std::vector<glm::vec3> rightMostColumn = interpolateThreeElementValues(topRight, bottomRight, window.height);
-
-	for (size_t y = 0; y < window.height; y++) {
-	    // Interpolate colours for each current row
-	    std::vector<glm::vec3> eachRowColours = interpolateThreeElementValues(leftMostColumn[y], rightMostColumn[y], window.width);
-		for (size_t x = 0; x < window.width; x++) {
-		    // Convert glm::vec3 colour to uint32_t
-		    uint32_t pixelColour = colourPalette(glm::vec3(eachRowColours[x]));
-			// Set the pixel colour using the converted colour
-			window.setPixelColour(x, y, pixelColour);
-
-            // Task 3: Single Dimension Greyscale Interpolation
-            // Use the x-coordinate as the intensity for a left-to-right gradient
-            float grayScale = static_cast<float>(x) / window.width * 255.0;
-            // Invert a gradient from white to black
-            grayScale = 255.0 - grayScale;
-        	// Pack RBG channels into a 32-bit integer
-        	uint32_t colour = (255 << 24) + (int(grayScale) << 16) + (int(grayScale) << 8) + int(grayScale);
-        	window.setPixelColour(x, y, colour);
-		}
-	}
-}
-*/
-
-/*
-Week3 Task2
-void draw(DrawingWindow &window) {
-	window.clearPixels();
-	Colour white = Colour(255, 255, 255);
-	drawLine(CanvasPoint(0, 0), CanvasPoint(window.width / 2, window.height / 2), window, white);
-    drawLine(CanvasPoint(window.width, 0), CanvasPoint(window.width / 2, window.height / 2), window, white);
-    drawLine(CanvasPoint(window.width / 2, 0), CanvasPoint(window.width / 2, window.height), window, white);
-    drawLine(CanvasPoint(window.width / 3, window.height / 2), CanvasPoint(2 * window.width / 3, window.height / 2), window, white);
-}
-*/
-
 void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
 		if (event.key.keysym.sym == SDLK_LEFT) std::cout << "LEFT" << std::endl;
@@ -221,10 +158,8 @@ int main(int argc, char *argv[]) {
     // W2 - Task 4: Three Element Numerical Interpolation
 	glm::vec3 from(1.0, 4.0, 9.2);
     glm::vec3 to(4.0, 1.0, 9.8);
-    size_t numberOfVectors = 4;
-    std::vector<glm::vec3> resultTEV = interpolateThreeElementValues(from, to, numberOfVectors);
-    for (size_t i = 0; i < resultTEV.size(); i++) {
-        std::cout << "(" << resultTEV[i].x << ", " << resultTEV[i].y << ", " << resultTEV[i].z << ")" << std::endl;
+    for (glm::vec3 vec : interpolateThreeElementValues(from, to, 4)) {
+        std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")" << std::endl;
     }
 
     SDL_Event event;
