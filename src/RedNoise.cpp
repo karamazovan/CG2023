@@ -143,6 +143,9 @@ void textureMapper(CanvasTriangle triangle, TextureMap &textureMap, DrawingWindo
         float xStart = interpolation(y, triangle.v0().y, triangle.v1().y, triangle.v0().x, triangle.v1().x);
         float xEnd = interpolation(y, triangle.v0().y, triangle.v2().y, triangle.v0().x, triangle.v2().x);
 
+        xStart = std::max(0.0f, xStart);
+        xEnd = std::min(float(WIDTH-1), xEnd);
+
         TexturePoint textureStart = TexturePoint(interpolation(y,triangle.v0().y, triangle.v1().y, triangle.v0().texturePoint.x, triangle.v1().texturePoint.x),
                                                  interpolation(y,triangle.v0().y, triangle.v1().y, triangle.v0().texturePoint.y, triangle.v1().texturePoint.y));
         TexturePoint textureEnd = TexturePoint(interpolation(y,triangle.v0().y, triangle.v2().y, triangle.v0().texturePoint.x, triangle.v2().texturePoint.x),
@@ -156,9 +159,13 @@ void textureMapper(CanvasTriangle triangle, TextureMap &textureMap, DrawingWindo
             int textureY = std::floor(interpolationTexture[i].y);
             int digit = textureY * textureMap.width + textureX;
 
-            if (digit >= 0 && digit < textureMap.pixels.size()) {
+            float realX = std::round(interpolationX[i]);
+            realX = std::max(0.0f, realX);
+            realX = std::min(float(WIDTH-1), realX);
+
+            if (textureX >= 0 && textureX < textureMap.width && textureY >= 0 && textureY < textureMap.height && digit >= 0 && digit < textureMap.pixels.size()) {
                 uint32_t textureColour = textureMap.pixels[digit];
-                window.setPixelColour(std::round(interpolationX[i]), y, textureColour);
+                window.setPixelColour(realX, y, textureColour);
             }
         }
     }
