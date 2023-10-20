@@ -34,9 +34,7 @@ std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 t
         result.push_back(from);
         return result;
     }
-    glm::vec3 divisor(numberOfVectors - 1, numberOfVectors - 1, numberOfVectors - 1);
-    glm::vec3 betweenValue = (to - from) / divisor;
-    // glm::vec3 betweenValue = (to - from) / glm::vec3(numberOfVectors - 1);
+    glm::vec3 betweenValue = (to - from) / glm::vec3(numberOfVectors - 1);
     for (size_t i = 0; i < numberOfVectors; i++) {
         result.push_back(from + betweenValue * glm::vec3(i));
     }
