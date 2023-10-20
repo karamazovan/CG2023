@@ -42,7 +42,8 @@ add_executable(RedNoise
         libs/sdw/ModelTriangle.h
         libs/sdw/DrawingWindow.h
         libs/sdw/CanvasPoint.h
-        libs/sdw/Colour.h)
+        libs/sdw/Colour.h
+        libs/sdw/TextureMap.h)
 
 if (MSVC)
     target_compile_options(RedNoise
