@@ -9,12 +9,10 @@
 #include <iostream>
 #include <vector>
 #include <glm/glm.hpp>
-#include <algorithm>
+
 
 #define WIDTH 320
 #define HEIGHT 240
-
-using namespace glm;
 
 std::vector<float> interpolateSingleFloats (float from, float to, size_t numberOfValues) {
     std::vector<float> result;
@@ -86,6 +84,32 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &wi
     }
 }
 
+void drawLineTexture(CanvasPoint from, CanvasPoint to, TextureMap &textureMap, DrawingWindow &window) {
+    float xDiff = to.x - from.x;
+    float yDiff = to.y - from.y;
+    float numberOfSteps = std::max(abs(xDiff), std::abs(yDiff));
+
+    float xStepSize = xDiff / numberOfSteps;
+    float yStepSize = yDiff / numberOfSteps;
+
+    float xTextureDiff = to.texturePoint.x - from.texturePoint.x;
+    float yTextureDiff = to.texturePoint.y - from.texturePoint.y;
+    float xTextureStepSize = xTextureDiff / numberOfSteps;
+    float yTextureStepSize = yTextureDiff / numberOfSteps;
+
+    for (float i = 0.0; i < numberOfSteps; i++) {
+        float x = std::round(from.x + (xStepSize * i));
+        float y = std::round(from.y + (yStepSize * i));
+        float xTexture = from.texturePoint.x + xTextureStepSize * i;
+        float yTexture = from.texturePoint.y + yTextureStepSize * i;
+
+        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT && xTexture >= 0 && xTexture < textureMap.width && yTexture >= 0 && yTexture < textureMap.height) {
+            uint32_t textureColour = textureMap.pixels[size_t(xTexture) + size_t(yTexture) * textureMap.width];
+            window.setPixelColour(round(x), round(y), textureColour);
+        }
+    }
+}
+
 void drawTriangle(CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
     drawLine(triangle.v0(), triangle.v1(), colour, window);
     drawLine(triangle.v1(), triangle.v2(), colour, window);
@@ -139,36 +163,39 @@ void textureMapper(CanvasTriangle triangle, TextureMap &textureMap, DrawingWindo
     if (triangle.v0().y > triangle.v2().y) std::swap(triangle.v0(), triangle.v2());
     if (triangle.v1().y > triangle.v2().y) std::swap(triangle.v1(), triangle.v2());
 
-    for (size_t y = triangle.v0().y; y < triangle.v2().y; y++) {
-        float xStart = interpolation(y, triangle.v0().y, triangle.v1().y, triangle.v0().x, triangle.v1().x);
-        float xEnd = interpolation(y, triangle.v0().y, triangle.v2().y, triangle.v0().x, triangle.v2().x);
+    for (size_t y = triangle.v0().y; y < triangle.v1().y; y++) {
+        CanvasPoint leftPoint, rightPoint;
 
-        xStart = std::max(0.0f, xStart);
-        xEnd = std::min(float(WIDTH-1), xEnd);
+        leftPoint.x = interpolation(y, triangle.v0().y, triangle.v1().y, triangle.v0().x, triangle.v1().x);
+        leftPoint.texturePoint.x = interpolation(y,triangle.v0().y, triangle.v1().y, triangle.v0().texturePoint.x, triangle.v1().texturePoint.x);
+        leftPoint.texturePoint.y = interpolation(y,triangle.v0().y, triangle.v1().y, triangle.v0().texturePoint.y, triangle.v1().texturePoint.y);
 
-        TexturePoint textureStart = TexturePoint(interpolation(y,triangle.v0().y, triangle.v1().y, triangle.v0().texturePoint.x, triangle.v1().texturePoint.x),
-                                                 interpolation(y,triangle.v0().y, triangle.v1().y, triangle.v0().texturePoint.y, triangle.v1().texturePoint.y));
-        TexturePoint textureEnd = TexturePoint(interpolation(y,triangle.v0().y, triangle.v2().y, triangle.v0().texturePoint.x, triangle.v2().texturePoint.x),
-                                                 interpolation(y,triangle.v0().y, triangle.v2().y, triangle.v0().texturePoint.y, triangle.v2().texturePoint.y));
-        float distance = xEnd - xStart;
-        std::vector<float> interpolationX = interpolateSingleFloats(xStart, xEnd, distance);
-        std::vector<glm::vec3> interpolationTexture = interpolateThreeElementValues(glm::vec3(textureStart.x, textureStart.y, 0), glm::vec3(textureEnd.x, textureEnd.y, 0), distance);
+        rightPoint.x = interpolation(y, triangle.v0().y, triangle.v2().y, triangle.v0().x, triangle.v2().x);
+        rightPoint.texturePoint.x = interpolation(y,triangle.v0().y, triangle.v2().y, triangle.v0().texturePoint.x, triangle.v2().texturePoint.x);
+        rightPoint.texturePoint.y = interpolation(y,triangle.v0().y, triangle.v2().y, triangle.v0().texturePoint.y, triangle.v2().texturePoint.y);
 
-        for (size_t i = 0; i < interpolationX.size(); i++) {
-            int textureX = std::floor(interpolationTexture[i].x);
-            int textureY = std::floor(interpolationTexture[i].y);
-            int digit = textureY * textureMap.width + textureX;
+        leftPoint.y = rightPoint.y = y;
 
-            float realX = std::round(interpolationX[i]);
-            realX = std::max(0.0f, realX);
-            realX = std::min(float(WIDTH-1), realX);
-
-            if (textureX >= 0 && textureX < textureMap.width && textureY >= 0 && textureY < textureMap.height && digit >= 0 && digit < textureMap.pixels.size()) {
-                uint32_t textureColour = textureMap.pixels[digit];
-                window.setPixelColour(realX, y, textureColour);
-            }
-        }
+        drawLineTexture(leftPoint, rightPoint, textureMap, window);
     }
+
+    for (size_t y = triangle.v1().y; y < triangle.v2().y; y++) {
+        CanvasPoint leftPoint, rightPoint;
+
+        leftPoint.x = interpolation(y, triangle.v1().y, triangle.v2().y, triangle.v1().x, triangle.v2().x);
+        leftPoint.texturePoint.x = interpolation(y,triangle.v1().y, triangle.v2().y, triangle.v1().texturePoint.x, triangle.v2().texturePoint.x);
+        leftPoint.texturePoint.y = interpolation(y,triangle.v1().y, triangle.v2().y, triangle.v1().texturePoint.y, triangle.v2().texturePoint.y);
+
+        rightPoint.x = interpolation(y, triangle.v0().y, triangle.v2().y, triangle.v0().x, triangle.v2().x);
+        rightPoint.texturePoint.x = interpolation(y,triangle.v0().y, triangle.v2().y, triangle.v0().texturePoint.x, triangle.v2().texturePoint.x);
+        rightPoint.texturePoint.y = interpolation(y,triangle.v0().y, triangle.v2().y, triangle.v0().texturePoint.y, triangle.v2().texturePoint.y);
+
+        leftPoint.y = rightPoint.y = y;
+
+        drawLineTexture(leftPoint, rightPoint, textureMap, window);
+    }
+    Colour whiteLine = Colour(255, 255, 255);
+    drawTriangle(triangle, whiteLine, window);
 }
 
 void draw(DrawingWindow &window) {
