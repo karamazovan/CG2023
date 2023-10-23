@@ -198,11 +198,29 @@ void textureMapper(CanvasTriangle triangle, TextureMap &textureMap, DrawingWindo
     drawTriangle(triangle, whiteLine, window);
 }
 
-std::vector<ModelTriangle> readOBJ(const std::string &fileName, float scalingFactor) {
+std::map<std::string, Colour> readMTL(const std::string &fileName) {
+    std::map<std::string, Colour> readPalette;
+    std::ifstream file(fileName);
+    std::string line, colourName;
+    while (std::getline(file, line)) {
+        std::vector<std::string> tokens = split(line, ' ');
+        if (tokens.empty()) continue;
+        if (tokens[0] == "newmtl" && tokens.size() >= 2) {
+            colourName = tokens[1];
+        } else if (tokens[0] == "Kd" && tokens.size() >= 4) {
+            readPalette[colourName] = Colour(colourName, int(std::stof(tokens[1]) * 255), int(std::stof(tokens[2]) * 255), int(std::stof(tokens[3]) * 255));
+        }
+    }
+    file.close();
+    return readPalette;
+}
+
+std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<std::string, Colour> &readPalette, float scalingFactor) {
     std::vector<ModelTriangle> triangles;
     std::vector<glm::vec3> vertices;
     std::ifstream file(fileName);
     std::string line;
+    Colour colour;
 
     while(std::getline(file, line)) {
         std::vector<std::string> tokens = split(line, ' ');
@@ -212,11 +230,13 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, float scalingFac
                     std::stof(tokens[1]) * scalingFactor,
                     std::stof(tokens[2]) * scalingFactor,
                     std::stof(tokens[3]) * scalingFactor));
+        } else if (tokens[0] == "usemtl" && tokens.size() >= 2) {
+            colour = readPalette.at(tokens[1]);
         } else if (tokens[0] == "f" && tokens.size() >= 4) {
             triangles.push_back(ModelTriangle(vertices[std::stoi(tokens[1]) - 1],
                                               vertices[std::stoi(tokens[2]) - 1],
                                               vertices[std::stoi(tokens[3]) - 1],
-                                              Colour()));
+                                              colour));
         }
     }
     file.close();
@@ -254,7 +274,6 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 }
 
 int main(int argc, char *argv[]) {
-    std::vector<ModelTriangle> triangles = readOBJ("cornell-box.obj", 10.35);
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 
     // W2 - Task 2: Single Element Numerical Interpolation
@@ -272,10 +291,23 @@ int main(int argc, char *argv[]) {
         std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")" << std::endl;
     }
 
-    std::vector<ModelTriangle> triangleModel = readOBJ("./src/cornell-box.obj", 0.35);
+    // std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
+    // std::vector<ModelTriangle> triangleModel = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
+
+
+    std::string fileMTL = "./src/cornell-box.mtl";
+    std::map<std::string, Colour> readPalette = readMTL(fileMTL);
+    for (const auto& pair : readPalette) {
+        Colour colour = pair.second;
+        std::cout << pair.first << " : (" << colour.red << ", " << colour.green << ", " << colour.blue << ")" << std::endl;
+    }
+
+    std::vector<ModelTriangle> triangleModel = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
     for (const ModelTriangle &triangle : triangleModel) {
         std::cout << triangle << std::endl;
     }
+
+
 
     SDL_Event event;
 
