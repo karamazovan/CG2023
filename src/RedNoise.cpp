@@ -2,6 +2,7 @@
 #include <CanvasTriangle.h>
 #include <Colour.h>
 #include <DrawingWindow.h>
+#include <ModelTriangle.h>
 #include <TextureMap.h>
 #include <TexturePoint.h>
 #include <Utils.h>
@@ -9,6 +10,7 @@
 #include <iostream>
 #include <vector>
 #include <glm/glm.hpp>
+#include <map>
 
 
 #define WIDTH 320
@@ -49,21 +51,22 @@ Colour randomColour() {
     return Colour(rand() % 256, rand() % 256, rand() % 256);
 }
 
-float interpolation(float x, float x1, float x2, float y1, float y2) {
+float interpolation(float targetPosition, float startPosition, float endPosition, float startValue, float endValue) {
     // shouldn't be equal to avoid division by zero
-    if (x1 == x2) {
-        return y1;
-    }
-    float slope = (y2 - y1) / (x2 - x1);
-    float y = y1 + (x - x1) * slope;
-    return y;
+    if (startPosition == endPosition) return startValue;
+
+    // this y = y1 + (x - x1) * ((y2 - y1) / (x2 - x1));
+    float slope = (endValue - startValue) / (endPosition - startPosition);
+    float targetValue = startValue + (targetPosition - startPosition) * slope;
+    return targetValue;
 }
 
 CanvasTriangle randomLines() {
-    CanvasPoint v0 = CanvasPoint(rand() % WIDTH, rand() % HEIGHT);
-    CanvasPoint v1 = CanvasPoint(rand() % WIDTH, rand() % HEIGHT);
-    CanvasPoint v2 = CanvasPoint(rand() % WIDTH, rand() % HEIGHT);
-    return CanvasTriangle(v0, v1, v2);
+    return CanvasTriangle (
+            CanvasPoint(rand() % WIDTH, rand() % HEIGHT),
+            CanvasPoint(rand() % WIDTH, rand() % HEIGHT),
+            CanvasPoint(rand() % WIDTH, rand() % HEIGHT)
+            );
 }
 
 void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &window) {
@@ -86,24 +89,23 @@ void drawLineTexture(CanvasPoint from, CanvasPoint to, TextureMap &textureMap, D
     float xDiff = to.x - from.x;
     float yDiff = to.y - from.y;
     float numberOfSteps = std::max(abs(xDiff), std::abs(yDiff));
-
     float xStepSize = xDiff / numberOfSteps;
     float yStepSize = yDiff / numberOfSteps;
-
     float xTextureDiff = to.texturePoint.x - from.texturePoint.x;
     float yTextureDiff = to.texturePoint.y - from.texturePoint.y;
     float xTextureStepSize = xTextureDiff / numberOfSteps;
     float yTextureStepSize = yTextureDiff / numberOfSteps;
-
     for (float i = 0.0; i < numberOfSteps; i++) {
         float x = std::round(from.x + (xStepSize * i));
         float y = std::round(from.y + (yStepSize * i));
         float xTexture = from.texturePoint.x + xTextureStepSize * i;
         float yTexture = from.texturePoint.y + yTextureStepSize * i;
+        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+            if (xTexture >= 0 && xTexture < textureMap.width && yTexture >= 0 && yTexture < textureMap.height) {
+                uint32_t textureColour = textureMap.pixels[size_t(xTexture) + size_t(yTexture) * textureMap.width];
+                window.setPixelColour(round(x), round(y), textureColour);
 
-        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT && xTexture >= 0 && xTexture < textureMap.width && yTexture >= 0 && yTexture < textureMap.height) {
-            uint32_t textureColour = textureMap.pixels[size_t(xTexture) + size_t(yTexture) * textureMap.width];
-            window.setPixelColour(round(x), round(y), textureColour);
+            }
         }
     }
 }
@@ -196,6 +198,31 @@ void textureMapper(CanvasTriangle triangle, TextureMap &textureMap, DrawingWindo
     drawTriangle(triangle, whiteLine, window);
 }
 
+std::vector<ModelTriangle> readOBJ(const std::string &fileName, float scalingFactor) {
+    std::vector<ModelTriangle> triangles;
+    std::vector<glm::vec3> vertices;
+    std::ifstream file(fileName);
+    std::string line;
+
+    while(std::getline(file, line)) {
+        std::vector<std::string> tokens = split(line, ' ');
+        if (tokens.empty()) continue;
+        if (tokens[0] == "v" && tokens.size() >= 4) {
+            vertices.push_back(glm::vec3 (
+                    std::stof(tokens[1]) * scalingFactor,
+                    std::stof(tokens[2]) * scalingFactor,
+                    std::stof(tokens[3]) * scalingFactor));
+        } else if (tokens[0] == "f" && tokens.size() >= 4) {
+            triangles.push_back(ModelTriangle(vertices[std::stoi(tokens[1]) - 1],
+                                              vertices[std::stoi(tokens[2]) - 1],
+                                              vertices[std::stoi(tokens[3]) - 1],
+                                              Colour()));
+        }
+    }
+    file.close();
+    return triangles;
+}
+
 void draw(DrawingWindow &window) {
     window.clearPixels();
     TextureMap textureMap("./src/texture.ppm");
@@ -227,6 +254,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 }
 
 int main(int argc, char *argv[]) {
+    std::vector<ModelTriangle> triangles = readOBJ("cornell-box.obj", 10.35);
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 
     // W2 - Task 2: Single Element Numerical Interpolation
@@ -242,6 +270,11 @@ int main(int argc, char *argv[]) {
     glm::vec3 to(4.0, 1.0, 9.8);
     for (glm::vec3 vec : interpolateThreeElementValues(from, to, 4)) {
         std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")" << std::endl;
+    }
+
+    std::vector<ModelTriangle> triangleModel = readOBJ("./src/cornell-box.obj", 0.35);
+    for (const ModelTriangle &triangle : triangleModel) {
+        std::cout << triangle << std::endl;
     }
 
     SDL_Event event;
