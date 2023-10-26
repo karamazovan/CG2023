@@ -39,13 +39,13 @@
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 82,
+				"line" : 83,
 				"parent" : 0
 			},
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 73,
+				"line" : 74,
 				"parent" : 0
 			},
 			{
@@ -67,13 +67,13 @@
 			{
 				"command" : 4,
 				"file" : 0,
-				"line" : 60,
+				"line" : 61,
 				"parent" : 0
 			},
 			{
 				"command" : 4,
 				"file" : 0,
-				"line" : 80,
+				"line" : 81,
 				"parent" : 0
 			},
 			{
@@ -264,7 +264,8 @@
 				14,
 				15,
 				16,
-				17
+				17,
+				18
 			]
 		}
 	],
@@ -368,6 +369,11 @@
 		{
 			"backtrace" : 1,
 			"path" : "libs/sdw/TextureMap.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "libs/sdw/RayTriangleIntersection.h",
 			"sourceGroupIndex" : 1
 		}
 	],

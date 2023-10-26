@@ -45,3 +45,5 @@ test/gtc/*.dds
 # Project Files
 *.cbp
 *.user
+
+cmake-build-debug/
