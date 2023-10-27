@@ -37,7 +37,7 @@ std::vector<float> interpolateSingleFloats (float from, float to, size_t numberO
         result.push_back(from);
         return result;
     }
-    float betweenValue = (to - from) / float(numberOfValues - 1);
+    float betweenValue = (to - from) / float(numberOfValues);
     for (size_t i = 0; i < numberOfValues; i++) {
         result.push_back(from + float(i) * betweenValue);
     }
@@ -58,22 +58,20 @@ std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 t
     return result;
 }
 
+float interpolation(float targetPosition, float startPosition, float endPosition, float startValue, float endValue) {
+    // shouldn't be equal to avoid division by zero
+    if (startPosition == endPosition) return startValue;
+    // this y = y1 + (x - x1) * ((y2 - y1) / (x2 - x1));
+    float slope = (endValue - startValue) / (endPosition - startPosition);
+    return startValue + (targetPosition - startPosition) * slope;
+}
+
 uint32_t colourPalette(Colour colour) {
     return (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 }
 
 Colour randomColour() {
     return Colour(rand() % 256, rand() % 256, rand() % 256);
-}
-
-float interpolation(float targetPosition, float startPosition, float endPosition, float startValue, float endValue) {
-    // shouldn't be equal to avoid division by zero
-    if (startPosition == endPosition) return startValue;
-
-    // this y = y1 + (x - x1) * ((y2 - y1) / (x2 - x1));
-    float slope = (endValue - startValue) / (endPosition - startPosition);
-    float targetValue = startValue + (targetPosition - startPosition) * slope;
-    return targetValue;
 }
 
 CanvasTriangle randomLines() {
@@ -129,33 +127,27 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, std::vector<std:
     if (triangle.v0().y > triangle.v2().y) std::swap(triangle.v0(), triangle.v2());
     if (triangle.v1().y > triangle.v2().y) std::swap(triangle.v1(), triangle.v2());
 
-    // Extract the x, y coordinates and z coordinates
-    float x0 = triangle.v0().x;
-    float x1 = triangle.v1().x;
-    float x2 = triangle.v2().x;
-    float y0 = triangle.v0().y;
-    float y1 = triangle.v1().y;
-    float y2 = triangle.v2().y;
-    float z0 = triangle.v0().depth;
-    float z1 = triangle.v1().depth;
-    float z2 = triangle.v2().depth;
+    // Create interpolated lists for x and z values
+    std::vector<float> xTop = interpolateSingleFloats(triangle.v0().x, triangle.v1().x, triangle.v1().y - triangle.v0().y + 1);
+    std::vector<float> xBottom = interpolateSingleFloats(triangle.v1().x, triangle.v2().x, triangle.v2().y - triangle.v1().y);
+
+    std::vector<float> zTop = interpolateSingleFloats(triangle.v0().depth, triangle.v1().depth, triangle.v1().y - triangle.v0().y + 1);
+    std::vector<float> zBottom = interpolateSingleFloats(triangle.v1().depth, triangle.v2().depth, triangle.v2().y - triangle.v1().y);
 
     // the top part of the triangle
-    for (size_t y = y0; y <= y1; y++) {
-        float xStart = interpolation(y, y0, y2, x0, x2);
-        float xEnd = interpolation(y, y0, y1, x0, x1);
-        float zStart = interpolation(y, y0, y2, z0, z2);
-        float zEnd = interpolation(y, y0, y1, z0, z1);
-        drawLine(CanvasPoint(xStart, y, 1/zStart), CanvasPoint(xEnd, y, 1/zEnd), colour,depthBuffer, window);
+    for (size_t i = 0; i < xTop.size(); i++) {
+        float y = triangle.v0().y + i;
+        float xStart = interpolation(y, triangle.v0().y, triangle.v2().y, triangle.v0().x, triangle.v2().x);
+        float zStart = interpolation(y, triangle.v0().y, triangle.v2().y, triangle.v0().depth, triangle.v2().depth);
+        drawLine(CanvasPoint(xStart, y, 1/zStart), CanvasPoint(xTop[i], y, 1/zTop[i]), colour,depthBuffer, window);
     }
 
     // the bottom part of the triangle
-    for (size_t y = y1 + 1; y <= y2; y++) {
-        float xStart = interpolation(y, y1, y2, x1, x2);
-        float xEnd = interpolation(y, y0, y2, x0, x2);
-        float zStart = interpolation(y, y1, y2, z1, z2);
-        float zEnd = interpolation(y, y0, y2, z0, z2);
-        drawLine(CanvasPoint(xStart, y, 1/zStart), CanvasPoint(xEnd, y, 1/zEnd), colour, depthBuffer, window);
+    for (size_t i = 0; i < xBottom.size(); i++) {
+        float y = triangle.v1().y + i;
+        float xEnd = interpolation(y, triangle.v0().y, triangle.v2().y, triangle.v0().x, triangle.v2().x);
+        float zEnd = interpolation(y, triangle.v0().y, triangle.v2().y, triangle.v0().depth, triangle.v2().depth);
+        drawLine(CanvasPoint(xEnd, y, 1/zEnd), CanvasPoint(xBottom[i], y, 1/zBottom[i]), colour, depthBuffer, window);
     }
     // drawTriangle(triangle, colour, depthBuffer, window);
 }
