@@ -129,44 +129,32 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, std::vector<std:
     if (triangle.v0().y > triangle.v2().y) std::swap(triangle.v0(), triangle.v2());
     if (triangle.v1().y > triangle.v2().y) std::swap(triangle.v1(), triangle.v2());
 
-    // Extract the x and y coordinates
+    // Extract the x, y coordinates and z coordinates
     float x0 = triangle.v0().x;
     float x1 = triangle.v1().x;
     float x2 = triangle.v2().x;
     float y0 = triangle.v0().y;
     float y1 = triangle.v1().y;
     float y2 = triangle.v2().y;
-
-    // Extract the z coordinates
     float z0 = triangle.v0().depth;
     float z1 = triangle.v1().depth;
     float z2 = triangle.v2().depth;
 
-    // Calculate slopes
-    float slope01 = (y1 - y0) != 0 ? (x1 - x0) / (y1 - y0) : 0;
-    float slope02 = (y2 - y0) != 0 ? (x2 - x0) / (y2 - y0) : 0;
-    float slope12 = (y2 - y1) != 0 ? (x2 - x1) / (y2 - y1) : 0;
-
-    // Calculate z-slopes
-    float zSlope01 = (y1 - y0) != 0 ? (z1 - z0) / (y1 - y0) : 0;
-    float zSlope02 = (y2 - y0) != 0 ? (z2 - z0) / (y2 - y0) : 0;
-    float zSlope12 = (y2 - y1) != 0 ? (z2 - z1) / (y2 - y1) : 0;
-
     // the top part of the triangle
     for (size_t y = y0; y <= y1; y++) {
-        float xStart = x0 + (y - y0) * slope02;
-        float xEnd = x0 + (y - y0) * slope01;
-        float zStart = z0 + (y - y0) * zSlope02;
-        float zEnd = z0 + (y - y0) * zSlope01;
+        float xStart = interpolation(y, y0, y2, x0, x2);
+        float xEnd = interpolation(y, y0, y1, x0, x1);
+        float zStart = interpolation(y, y0, y2, z0, z2);
+        float zEnd = interpolation(y, y0, y1, z0, z1);
         drawLine(CanvasPoint(xStart, y, 1/zStart), CanvasPoint(xEnd, y, 1/zEnd), colour,depthBuffer, window);
     }
 
     // the bottom part of the triangle
     for (size_t y = y1 + 1; y <= y2; y++) {
-        float xStart = x1 + (y - y1) * slope12;
-        float xEnd = x0 + (y - y0) * slope02;
-        float zStart = z1 + (y - y1) * zSlope12;
-        float zEnd = z0 + (y - y0) * zSlope02;
+        float xStart = interpolation(y, y1, y2, x1, x2);
+        float xEnd = interpolation(y, y0, y2, x0, x2);
+        float zStart = interpolation(y, y1, y2, z1, z2);
+        float zEnd = interpolation(y, y0, y2, z0, z2);
         drawLine(CanvasPoint(xStart, y, 1/zStart), CanvasPoint(xEnd, y, 1/zEnd), colour, depthBuffer, window);
     }
     // drawTriangle(triangle, colour, depthBuffer, window);
