@@ -16,9 +16,11 @@
 #define WIDTH 320
 #define HEIGHT 240
 
-glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 5.0);
-glm::mat3 cameraOrientation = glm::mat3(1, 0, 0, 0, 1, 0, 0, 0, 1);
 float focalLength = 2.0;
+glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 5.0);
+glm::mat3 cameraOrientation = glm::mat3(1, 0, 0,
+                                        0, 1, 0,
+                                        0, 0, 1);
 
 std::vector<std::vector<float>> initialiseDepthBuffer(int width, int height) {
     std::vector<std::vector<float>> depthBuffer;
@@ -160,7 +162,7 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, std::vector<std:
 }
 
 CanvasPoint getCanvasIntersectionPoint(glm::vec3 vertexPosition, float frame) {
-    glm::vec3 transposition = vertexPosition - cameraPosition;
+    glm::vec3 transposition = (vertexPosition - cameraPosition) * cameraOrientation;
     float u = (-1) * (focalLength * ((transposition.x) / (transposition.z)));
     float v = (focalLength * ((transposition.y) / (transposition.z)));
     // rounding to ensure whole pixels
@@ -181,9 +183,7 @@ void wireframeRender(std::vector<ModelTriangle> &modelTriangle, std::vector<std:
     }
 }
 
-void rasterisedRender(std::vector<ModelTriangle> &modelTriangle, DrawingWindow &window) {
-    window.clearPixels();
-    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
+void rasterisedRender(std::vector<ModelTriangle> &modelTriangle, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
     for(auto &triangle: modelTriangle) {
         CanvasTriangle canvasTriangle;
         for(int i = 0; i < 3; i++) {
@@ -239,14 +239,18 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<s
     return triangles;
 }
 
-void draw(std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+void draw(DrawingWindow &window) {
     window.clearPixels();
+    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
+    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
+    std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
+    rasterisedRender(modelTriangle, depthBuffer, window);
 }
 
 void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
-    float move = 0.1f;
-    float angle = glm::radians(5.0f);
     if (event.type == SDL_KEYDOWN) {
+        float move = 0.1f;
+        float angle = glm::radians(5.0f);
         if (event.key.keysym.sym == SDLK_LEFT) {
             cameraPosition.x += move;
             std::cout << "LEFT" << std::endl;
@@ -264,24 +268,24 @@ void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, 
             std::cout << "DOWN" << std::endl;
         }
         else if (event.key.keysym.sym == SDLK_i) {
-            cameraPosition = glm::mat3(glm::vec3(1, 0, 0),
-                                       glm::vec3(0, cos(-angle), -sin(-angle)),
-                                       glm::vec3(0, sin(-angle), cos(-angle))) * cameraPosition;
+            cameraOrientation = glm::mat3(glm::vec3(1, 0, 0),
+                                          glm::vec3(0, cos(angle), -sin(angle)),
+                                          glm::vec3(0, sin(angle), cos(angle))) * cameraOrientation;
         }
         else if (event.key.keysym.sym == SDLK_j) {
-            cameraPosition = glm::mat3(glm::vec3(cos(-angle), 0, sin(-angle)),
-                                       glm::vec3(0, 1, 0),
-                                       glm::vec3(-sin(-angle), 0, cos(-angle))) * cameraPosition;
+            cameraOrientation = glm::mat3(glm::vec3(cos(angle), 0, sin(angle)),
+                                          glm::vec3(0, 1, 0),
+                                          glm::vec3(-sin(angle), 0, cos(angle))) * cameraOrientation;
         }
         else if (event.key.keysym.sym == SDLK_k) {
-            cameraPosition = glm::mat3(glm::vec3(1, 0, 0),
-                                       glm::vec3(0, cos(angle), -sin(angle)),
-                                       glm::vec3(0, sin(angle), cos(angle))) * cameraPosition;
-        }
+            cameraOrientation = glm::mat3(glm::vec3(1, 0, 0),
+                                          glm::vec3(0, cos(-angle), -sin(-angle)),
+                                          glm::vec3(0, sin(-angle), cos(-angle))) * cameraOrientation;
+           }
         else if (event.key.keysym.sym == SDLK_l) {
-            cameraPosition = glm::mat3(glm::vec3(cos(angle), 0, sin(angle)),
-                                       glm::vec3(0, 1, 0),
-                                       glm::vec3(-sin(angle), 0, cos(angle))) * cameraPosition;
+            cameraOrientation = glm::mat3(glm::vec3(cos(-angle), 0, sin(-angle)),
+                                          glm::vec3(0, 1, 0),
+                                          glm::vec3(-sin(-angle), 0, cos(-angle))) * cameraOrientation;
         }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         window.savePPM("output.ppm");
@@ -294,17 +298,12 @@ int main(int argc, char *argv[]) {
 
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
 
-    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
-    std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
-
-
     SDL_Event event;
 
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, depthBuffer, window);
-        // draw(depthBuffer, window);
-        rasterisedRender(modelTriangle, window);
+        draw(window);
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
     }
