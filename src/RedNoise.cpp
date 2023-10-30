@@ -87,6 +87,7 @@ CanvasTriangle randomLines() {
 
 void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
     uint32_t colourSet = colourPalette(colour);
+
     float xDiff = to.x - from.x;
     float yDiff = to.y - from.y;
     float zDiff = to.depth - from.depth;
@@ -130,6 +131,12 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, std::vector<std:
     if (triangle.v0().y > triangle.v2().y) std::swap(triangle.v0(), triangle.v2());
     if (triangle.v1().y > triangle.v2().y) std::swap(triangle.v1(), triangle.v2());
 
+    // Interpolate values for top and bottom part
+    std::vector<float> xTop = interpolateSingleFloats(triangle.v0().x, triangle.v2().x, triangle.v1().y - triangle.v0().y);
+    std::vector<float> zTop = interpolateSingleFloats(triangle.v0().depth, triangle.v2().depth, triangle.v1().y - triangle.v0().y);
+    std::vector<float> xBottom = interpolateSingleFloats(triangle.v1().x, triangle.v2().x, triangle.v2().y - triangle.v1().y);
+    std::vector<float> zBottom = interpolateSingleFloats(triangle.v1().depth,  triangle.v2().depth, triangle.v2().y - triangle.v1().y);
+
     // Extract the x, y coordinates and z coordinates
     float x0 = triangle.v0().x;
     float x1 = triangle.v1().x;
@@ -142,19 +149,21 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, std::vector<std:
     float z2 = triangle.v2().depth;
 
     // the top part of the triangle
-    for (size_t y = y0; y <= y1; y++) {
-        float xStart = interpolation(y, y0, y2, x0, x2);
+    for (size_t i = 0; i < xTop.size(); i++) {
+        float y = triangle.v0().y + i;
+        float xStart = xTop[i];
         float xEnd = interpolation(y, y0, y1, x0, x1);
-        float zStart = interpolation(y, y0, y2, z0, z2);
+        float zStart = zTop[i];
         float zEnd = interpolation(y, y0, y1, z0, z1);
         drawLine(CanvasPoint(xStart, y, zStart), CanvasPoint(xEnd, y, zEnd), colour,depthBuffer, window);
     }
 
     // the bottom part of the triangle
-    for (size_t y = y1 + 1; y <= y2; y++) {
-        float xStart = interpolation(y, y1, y2, x1, x2);
+    for (size_t i = 0; i < xBottom.size(); i++) {
+        float y = triangle.v1().y + i;
+        float xStart = xBottom[i];
         float xEnd = interpolation(y, y0, y2, x0, x2);
-        float zStart = interpolation(y, y1, y2, z1, z2);
+        float zStart = zBottom[i];
         float zEnd = interpolation(y, y0, y2, z0, z2);
         drawLine(CanvasPoint(xStart, y, zStart), CanvasPoint(xEnd, y, zEnd), colour, depthBuffer, window);
     }
@@ -239,12 +248,36 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<s
     return triangles;
 }
 
+void lookAt() {
+    glm::vec3 forward = glm::normalize(cameraPosition);
+    glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0, 1, 0), forward));
+    glm::vec3 up = glm::cross(forward, right);
+
+    cameraOrientation[0] = right;
+    cameraOrientation[1] = up;
+    cameraOrientation[2] = forward;
+}
+
+void orbitCamera() {
+    float degrees = 5.0f;
+    float angle = glm::radians(degrees);
+
+    glm::mat3 yRotation = glm::mat3(glm::cos(angle), 0, glm::sin(angle),
+                                    0, 1, 0,
+                                    -glm::sin(angle), 0, glm::cos(angle));
+
+    cameraPosition = yRotation * cameraPosition;
+    lookAt();
+}
+
+
 void draw(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
     std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
     rasterisedRender(modelTriangle, depthBuffer, window);
+    orbitCamera();
 }
 
 void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
@@ -281,7 +314,7 @@ void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, 
             cameraOrientation = glm::mat3(glm::vec3(1, 0, 0),
                                           glm::vec3(0, cos(-angle), -sin(-angle)),
                                           glm::vec3(0, sin(-angle), cos(-angle))) * cameraOrientation;
-           }
+        }
         else if (event.key.keysym.sym == SDLK_l) {
             cameraOrientation = glm::mat3(glm::vec3(cos(-angle), 0, sin(-angle)),
                                           glm::vec3(0, 1, 0),
