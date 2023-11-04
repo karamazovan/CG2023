@@ -16,11 +16,13 @@
 #define WIDTH 320
 #define HEIGHT 240
 
+
+bool orbitAnimation = true;
 float focalLength = 2.0;
 glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 5.0);
-glm::mat3 cameraOrientation = glm::mat3(1, 0, 0,
-                                        0, 1, 0,
-                                        0, 0, 1);
+glm::mat3 cameraOrientation = glm::mat3(glm::vec3(1, 0, 0),
+                                        glm::vec3(0, 1, 0),
+                                        glm::vec3(0, 0, 1));
 
 std::vector<std::vector<float>> initialiseDepthBuffer(int width, int height) {
     std::vector<std::vector<float>> depthBuffer;
@@ -47,7 +49,6 @@ std::vector<float> interpolateSingleFloats (float from, float to, size_t numberO
     return result;
 }
 
-// (x, y, z)
 std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, size_t numberOfVectors) {
     std::vector<glm::vec3> result;
     if (numberOfVectors == 0) {
@@ -167,7 +168,7 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, std::vector<std:
         float zEnd = interpolation(y, y0, y2, z0, z2);
         drawLine(CanvasPoint(xStart, y, zStart), CanvasPoint(xEnd, y, zEnd), colour, depthBuffer, window);
     }
-    // drawTriangle(triangle, colour, depthBuffer, window);
+    drawTriangle(triangle, colour, depthBuffer, window);
 }
 
 CanvasPoint getCanvasIntersectionPoint(glm::vec3 vertexPosition, float frame) {
@@ -252,24 +253,18 @@ void lookAt() {
     glm::vec3 forward = glm::normalize(cameraPosition);
     glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0, 1, 0), forward));
     glm::vec3 up = glm::cross(forward, right);
-
-    cameraOrientation[0] = right;
-    cameraOrientation[1] = up;
-    cameraOrientation[2] = forward;
+    cameraOrientation = glm::mat3(right, up, forward);
 }
 
 void orbitCamera() {
-    float degrees = 5.0f;
-    float angle = glm::radians(degrees);
-
-    glm::mat3 yRotation = glm::mat3(glm::cos(angle), 0, glm::sin(angle),
-                                    0, 1, 0,
-                                    -glm::sin(angle), 0, glm::cos(angle));
-
-    cameraPosition = yRotation * cameraPosition;
+    float speed = 1.0f;
+    float theta = glm::radians(speed);
+    glm::mat3 rotationMatrix = glm::mat3(glm::vec3(glm::cos(theta), 0, glm::sin(theta)),
+                                    glm::vec3(0, 1, 0),
+                                    glm::vec3(-glm::sin(theta), 0, glm::cos(theta)));
+    cameraPosition = rotationMatrix * cameraPosition;
     lookAt();
 }
-
 
 void draw(DrawingWindow &window) {
     window.clearPixels();
@@ -277,48 +272,68 @@ void draw(DrawingWindow &window) {
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
     std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
     rasterisedRender(modelTriangle, depthBuffer, window);
-    orbitCamera();
+    if (orbitAnimation) {
+        orbitCamera();
+    }
+    // rasterisedRender(modelTriangle, depthBuffer, window);
 }
 
 void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
     if (event.type == SDL_KEYDOWN) {
+        bool cameraUpdated = false;
         float move = 0.1f;
-        float angle = glm::radians(5.0f);
+        float theta = M_PI / 2.0f;
         if (event.key.keysym.sym == SDLK_LEFT) {
             cameraPosition.x += move;
             std::cout << "LEFT" << std::endl;
+            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_RIGHT) {
             cameraPosition.x -= move;
             std::cout << "RIGHT" << std::endl;
+            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_UP) {
             cameraPosition.y += move;
             std::cout << "UP" << std::endl;
+            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_DOWN) {
             cameraPosition.y -= move;
             std::cout << "DOWN" << std::endl;
+            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_i) {
-            cameraOrientation = glm::mat3(glm::vec3(1, 0, 0),
-                                          glm::vec3(0, cos(angle), -sin(angle)),
-                                          glm::vec3(0, sin(angle), cos(angle))) * cameraOrientation;
+            cameraPosition = glm::mat3(glm::vec3(1, 0, 0),
+                                          glm::vec3(0, glm::cos(theta), -glm::sin(theta)),
+                                          glm::vec3(0, glm::sin(theta), glm::cos(theta))) * cameraPosition;
+            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_j) {
-            cameraOrientation = glm::mat3(glm::vec3(cos(angle), 0, sin(angle)),
+            cameraPosition = glm::mat3(glm::vec3(glm::cos(theta), 0, glm::sin(theta)),
                                           glm::vec3(0, 1, 0),
-                                          glm::vec3(-sin(angle), 0, cos(angle))) * cameraOrientation;
+                                          glm::vec3(-glm::sin(theta), 0, glm::cos(theta))) * cameraPosition;
+            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_k) {
-            cameraOrientation = glm::mat3(glm::vec3(1, 0, 0),
-                                          glm::vec3(0, cos(-angle), -sin(-angle)),
-                                          glm::vec3(0, sin(-angle), cos(-angle))) * cameraOrientation;
+            cameraPosition = glm::mat3(glm::vec3(1, 0, 0),
+                                          glm::vec3(0, glm::cos(-theta), -glm::sin(-theta)),
+                                          glm::vec3(0, glm::sin(-theta), glm::cos(-theta))) * cameraPosition;
+            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_l) {
-            cameraOrientation = glm::mat3(glm::vec3(cos(-angle), 0, sin(-angle)),
+            cameraPosition = glm::mat3(glm::vec3(glm::cos(-theta), 0, glm::sin(-theta)),
                                           glm::vec3(0, 1, 0),
-                                          glm::vec3(-sin(-angle), 0, cos(-angle))) * cameraOrientation;
+                                          glm::vec3(-glm::sin(-theta), 0, glm::cos(-theta))) * cameraPosition;
+            cameraUpdated = true;
+        }
+        else if (event.key.keysym.sym == SDLK_o) {
+            orbitAnimation = !orbitAnimation;
+            std::cout << "Orbit Camera " << (orbitAnimation ? "ON" : "OFF") << std::endl;
+        }
+        if (cameraUpdated) {
+            lookAt();
+            // draw(window);
         }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         window.savePPM("output.ppm");
