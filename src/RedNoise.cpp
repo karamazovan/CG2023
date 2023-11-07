@@ -155,6 +155,7 @@ void triangleRasteriser(CanvasTriangle triangle, Colour colour, std::vector<std:
         CanvasPoint end(xRightSide[y - yStart], y, zRightSide[y - yStart]);
         drawLine(start, end, colour, depthBuffer, window);
     }
+    drawTriangle(triangle, colour, depthBuffer, window);
 }
 
 CanvasPoint getCanvasIntersectionPoint(glm::vec3 vertexPosition, float frame) {
@@ -165,6 +166,32 @@ CanvasPoint getCanvasIntersectionPoint(glm::vec3 vertexPosition, float frame) {
     CanvasPoint result = CanvasPoint(std::round(u * frame + WIDTH/2.0f), std::round(v * frame + HEIGHT/2.0f));
     result.depth = -transposition.z;
     return result;
+}
+
+RayTriangleIntersection getClosetValidIntersection (std::vector<ModelTriangle> &modelTriangle, glm::vec3 &cameraPosition, glm::vec3 &rayDirection) {
+    RayTriangleIntersection closestIntersection;
+    closestIntersection.distanceFromCamera = INFINITY;
+    for (size_t i = 0; i < modelTriangle.size(); i++) {
+        ModelTriangle triangle = modelTriangle[i];
+        glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+        glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+        glm::vec3 SPVector = cameraPosition - triangle.vertices[0];
+        glm::mat3 DEMatrix(-rayDirection, e0, e1);
+        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+
+        float t = possibleSolution[0];
+        float u = possibleSolution[1];
+        float v = possibleSolution[2];
+
+        if (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0 && (u + v) <= 1.0) {
+            if (t > 0 && t < closestIntersection.distanceFromCamera) {
+                glm::vec3 r = cameraPosition + t * rayDirection;
+                closestIntersection = RayTriangleIntersection(r, t, triangle, i);
+                closestIntersection.distanceFromCamera = t;
+            }
+        }
+    }
+    return closestIntersection;
 }
 
 void wireframeRender(std::vector<ModelTriangle> &modelTriangle, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
@@ -250,6 +277,28 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<s
     }
     file.close();
     return triangles;
+}
+
+glm::vec3 pixelToDirection(int x, int y, glm::vec3 &cameraPosition, glm::mat3 &cameraOrientation, float focalLenegth) {
+    float xNormalise = (x + 0.5f) / WIDTH * 2.0f - 1.0f;
+    float yNormalise = (y + 0.5f) / HEIGHT * 2.0f - 1.0f;
+    glm::vec3 pixelPosition = cameraPosition + cameraOrientation * glm::vec3(xNormalise, -yNormalise, -focalLenegth);
+    glm::vec3 rayDirection = glm::normalize(pixelPosition - cameraPosition);
+    return rayDirection;
+}
+
+void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            // converting from 2D pixel into 3D direction
+            glm::vec3 rayDirection = pixelToDirection(x, y, cameraPosition, cameraOrientation, focalLength);
+            RayTriangleIntersection intersectioPoint = getClosetValidIntersection(modelTriangle, cameraPosition, rayDirection);
+            if (intersectioPoint.distanceFromCamera != INFINITY) {
+                uint32_t colour = colourPalette(intersectioPoint.intersectedTriangle.colour);
+                window.setPixelColour(x, y, colour);
+            }
+        }
+    }
 }
 
 void draw(DrawingWindow &window) {
@@ -347,7 +396,8 @@ int main(int argc, char *argv[]) {
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, depthBuffer, window);
-        draw(window);
+        // draw(window);
+        drawRasterisedScene(modelTriangle, depthBuffer, window);
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
     }
