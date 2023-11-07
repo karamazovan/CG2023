@@ -19,7 +19,7 @@
 
 bool orbitAnimation = true;
 float focalLength = 2.0;
-glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 5.0);
+glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 4.0);
 glm::mat3 cameraOrientation = glm::mat3(1.0);
 
 int roundToInt(float val) {
@@ -280,8 +280,8 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<s
 }
 
 glm::vec3 pixelToDirection(int x, int y, glm::vec3 &cameraPosition, glm::mat3 &cameraOrientation, float focalLenegth) {
-    float xNormalise = (x + 0.5f) / WIDTH * 2.0f - 1.0f;
-    float yNormalise = (y + 0.5f) / HEIGHT * 2.0f - 1.0f;
+    float xNormalise = (x - WIDTH / 2.0f) * (1.0 / (HEIGHT * 2.0f/3.0f));
+    float yNormalise = (y - HEIGHT / 2.0f) * (1.0 / (HEIGHT * 2.0f/3.0f));
     glm::vec3 pixelPosition = cameraPosition + cameraOrientation * glm::vec3(xNormalise, -yNormalise, -focalLenegth);
     glm::vec3 rayDirection = glm::normalize(pixelPosition - cameraPosition);
     return rayDirection;
