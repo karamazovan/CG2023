@@ -19,7 +19,7 @@
 
 bool orbitAnimation = true;
 float focalLength = 2.0;
-glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 4.0);
+glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 5.0);
 glm::mat3 cameraOrientation = glm::mat3(1.0);
 
 int roundToInt(float val) {
@@ -99,7 +99,6 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, std::vector<std::
         float z = 1 / (from.depth + (zStepSize * i));
 
         if (roundToInt(x)>= 0 && roundToInt(x) < WIDTH && roundToInt(y) >= 0 && roundToInt(y)< HEIGHT) {
-    //        std::cout << z << ", " << depthBuffer[roundY][roundX] << std::endl;
             if (z > depthBuffer[roundToInt(y)][roundToInt(x)]) {
                 window.setPixelColour(roundToInt(x), roundToInt(y), colourSet);
                depthBuffer[roundToInt(y)][roundToInt(x)] = z;
@@ -234,6 +233,31 @@ void orbitCamera() {
     lookAt();
 }
 
+void cameraTranslation(float tx, float ty, float tz) {
+    cameraPosition.x += tx;
+    cameraPosition.y += ty;
+    cameraPosition.z += tz;
+    lookAt();
+}
+
+void cameraRotation(float angleX, float angleY) {
+    if (angleX != 0) {
+        float thetaX = glm::radians(angleX);
+        glm::mat3 rotationMatrixX = glm::mat3(glm::vec3(1, 0, 0),
+                                              glm::vec3(0, glm::cos(thetaX), -glm::sin(thetaX)),
+                                              glm::vec3(0, glm::sin(thetaX), glm::cos(thetaX)));
+        cameraPosition = rotationMatrixX * cameraPosition;
+    }
+    if (angleY != 0) {
+        float thetaY = glm::radians(angleY);
+        glm::mat3 rotationMatrixY = glm::mat3(glm::vec3(glm::cos(thetaY), 0, glm::sin(thetaY)),
+                                              glm::vec3( 0, 1, 0),
+                                              glm::vec3(-glm::sin(thetaY), 0, glm::cos(thetaY)));
+        cameraPosition = rotationMatrixY * cameraPosition;
+    }
+    lookAt();
+}
+
 std::map<std::string, Colour> readMTL(const std::string &fileName) {
     std::map<std::string, Colour> readPalette;
     std::ifstream file(fileName);
@@ -314,69 +338,47 @@ void draw(DrawingWindow &window) {
 
 void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
     if (event.type == SDL_KEYDOWN) {
-        bool cameraUpdated = false;
-        float move = 0.1f;
-        float theta = M_PI / 2.0f;
+        float translationSpeed = 0.1f;
+        float rotationSpeed = 2.0f;
         if (event.key.keysym.sym == SDLK_LEFT) {
-            cameraPosition.x += move;
+            cameraTranslation(translationSpeed, 0.0f, 0.0f);
             std::cout << "LEFT" << std::endl;
-            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_RIGHT) {
-            cameraPosition.x -= move;
+            cameraTranslation(-translationSpeed, 0.0f, 0.0f);
             std::cout << "RIGHT" << std::endl;
-            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_UP) {
-            cameraPosition.y += move;
+            cameraTranslation( 0.0f, translationSpeed, 0.0f);
             std::cout << "UP" << std::endl;
-            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_DOWN) {
-            cameraPosition.y -= move;
+            cameraTranslation( 0.0f, -translationSpeed, 0.0f);
             std::cout << "DOWN" << std::endl;
-            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_f) {
-            cameraPosition.z += move;
+            cameraTranslation( 0.0f, 0.0f, -translationSpeed);
             std::cout << "FORWARDS" << std::endl;
-            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_b) {
-            cameraPosition.z -= move;
+            cameraTranslation( 0.0f, 0.0f, translationSpeed);
             std::cout << "BACKWARDS" << std::endl;
-            cameraUpdated = true;
         }
         else if (event.key.keysym.sym == SDLK_i) {
-            cameraPosition = glm::mat3(glm::vec3(1, 0, 0),
-                                          glm::vec3(0, glm::cos(theta), -glm::sin(theta)),
-                                          glm::vec3(0, glm::sin(theta), glm::cos(theta))) * cameraPosition;
-            cameraUpdated = true;
-        }
-        else if (event.key.keysym.sym == SDLK_j) {
-            cameraPosition = glm::mat3(glm::vec3(glm::cos(theta), 0, glm::sin(theta)),
-                                          glm::vec3(0, 1, 0),
-                                          glm::vec3(-glm::sin(theta), 0, glm::cos(theta))) * cameraPosition;
-            cameraUpdated = true;
+            cameraRotation(rotationSpeed, 0.0f);
         }
         else if (event.key.keysym.sym == SDLK_k) {
-            cameraPosition = glm::mat3(glm::vec3(1, 0, 0),
-                                          glm::vec3(0, glm::cos(-theta), -glm::sin(-theta)),
-                                          glm::vec3(0, glm::sin(-theta), glm::cos(-theta))) * cameraPosition;
-            cameraUpdated = true;
+            cameraRotation(-rotationSpeed, 0.0f);
+        }
+        else if (event.key.keysym.sym == SDLK_j) {
+            cameraRotation(0.0f, -rotationSpeed);
         }
         else if (event.key.keysym.sym == SDLK_l) {
-            cameraPosition = glm::mat3(glm::vec3(glm::cos(-theta), 0, glm::sin(-theta)),
-                                          glm::vec3(0, 1, 0),
-                                          glm::vec3(-glm::sin(-theta), 0, glm::cos(-theta))) * cameraPosition;
-            cameraUpdated = true;
+            cameraRotation(0.0f, rotationSpeed);
         }
         else if (event.key.keysym.sym == SDLK_o) {
             orbitAnimation = !orbitAnimation;
             std::cout << "Orbit Camera " << (orbitAnimation ? "ON" : "OFF") << std::endl;
-        }
-        if (cameraUpdated) {
-            lookAt();
         }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         window.savePPM("output.ppm");
@@ -396,8 +398,8 @@ int main(int argc, char *argv[]) {
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, depthBuffer, window);
-        // draw(window);
-        drawRasterisedScene(modelTriangle, depthBuffer, window);
+        draw(window);
+        // drawRasterisedScene(modelTriangle, depthBuffer, window);
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
     }
