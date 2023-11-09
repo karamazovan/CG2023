@@ -17,13 +17,15 @@
 #define WIDTH 320
 #define HEIGHT 240
 
+int callDraw = 0;
 bool orbitAnimation = true;
-float focalLength = 2.0;
-glm::vec3 cameraPosition = glm::vec3(0.0, 0.0, 5.0);
+float focalLength = 2.0f;
+glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
+glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 5.0f);
 glm::mat3 cameraOrientation = glm::mat3(1.0);
 
-int roundToInt(float val) {
-    return int(std::round(val));
+int roundToInt(float value) {
+    return int(std::round(value));
 }
 
 std::vector<std::vector<float>> initialiseDepthBuffer(int width, int height) {
@@ -194,6 +196,7 @@ RayTriangleIntersection getClosetValidIntersection (std::vector<ModelTriangle> &
 }
 
 void wireframeRender(std::vector<ModelTriangle> &modelTriangle, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    window.clearPixels();
     for (auto &triangle : modelTriangle) {
         CanvasTriangle canvasTriangle;
         for (int i = 0; i < 3; i++) {
@@ -304,8 +307,8 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<s
 }
 
 glm::vec3 pixelToDirection(int x, int y, glm::vec3 &cameraPosition, glm::mat3 &cameraOrientation, float focalLenegth) {
-    float xNormalise = (x - WIDTH / 2.0f) * (1.0 / (HEIGHT * 2.0f/3.0f));
-    float yNormalise = (y - HEIGHT / 2.0f) * (1.0 / (HEIGHT * 2.0f/3.0f));
+    float xNormalise = (x - WIDTH / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
+    float yNormalise = (y - HEIGHT / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
     glm::vec3 pixelPosition = cameraPosition + cameraOrientation * glm::vec3(xNormalise, -yNormalise, -focalLenegth);
     glm::vec3 rayDirection = glm::normalize(pixelPosition - cameraPosition);
     return rayDirection;
@@ -316,16 +319,31 @@ void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle,  std::vector
         for (int x = 0; x < WIDTH; x++) {
             // converting from 2D pixel into 3D direction
             glm::vec3 rayDirection = pixelToDirection(x, y, cameraPosition, cameraOrientation, focalLength);
-            RayTriangleIntersection intersectioPoint = getClosetValidIntersection(modelTriangle, cameraPosition, rayDirection);
-            if (intersectioPoint.distanceFromCamera != INFINITY) {
-                uint32_t colour = colourPalette(intersectioPoint.intersectedTriangle.colour);
-                window.setPixelColour(x, y, colour);
+            RayTriangleIntersection closestIntersection = getClosetValidIntersection(modelTriangle, cameraPosition,rayDirection);
+
+            glm::vec3 lightDirection = glm::normalize(closestIntersection.intersectionPoint - lightPosition);
+            RayTriangleIntersection lightIntersection = getClosetValidIntersection(modelTriangle, lightPosition, lightDirection);
+
+            if (closestIntersection.distanceFromCamera != INFINITY) {
+                if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
+                    uint32_t colour = colourPalette(closestIntersection.intersectedTriangle.colour);
+                    window.setPixelColour(x, y, colour);
+                }
             }
         }
     }
 }
 
-void draw(DrawingWindow &window) {
+void wireframeDraw(DrawingWindow &window) {
+    window.clearPixels();
+    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
+    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
+    std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
+    wireframeRender(modelTriangle, depthBuffer, window);
+
+}
+
+void rasterisedDraw(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
@@ -336,7 +354,15 @@ void draw(DrawingWindow &window) {
     }
 }
 
-void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+void draw(DrawingWindow &window) {
+    window.clearPixels();
+    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
+    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
+    std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
+    drawRasterisedScene(modelTriangle, depthBuffer, window);
+}
+
+void handleEvent(SDL_Event event, DrawingWindow &window) {
     if (event.type == SDL_KEYDOWN) {
         float translationSpeed = 0.1f;
         float rotationSpeed = 2.0f;
@@ -380,6 +406,15 @@ void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, 
             orbitAnimation = !orbitAnimation;
             std::cout << "Orbit Camera " << (orbitAnimation ? "ON" : "OFF") << std::endl;
         }
+        else if (event.key.keysym.sym == SDLK_1) {
+            callDraw = 1;
+        }
+        else if (event.key.keysym.sym == SDLK_2) {
+            callDraw = 2;
+        }
+        else if (event.key.keysym.sym == SDLK_3) {
+            callDraw = 3;
+        }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         window.savePPM("output.ppm");
         window.saveBMP("output.bmp");
@@ -389,17 +424,21 @@ void handleEvent(SDL_Event event, std::vector<std::vector<float>> &depthBuffer, 
 int main(int argc, char *argv[]) {
     DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
 
-    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
-    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
-    std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
-
     SDL_Event event;
 
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
-        if (window.pollForInputEvents(event)) handleEvent(event, depthBuffer, window);
-        draw(window);
-        // drawRasterisedScene(modelTriangle, depthBuffer, window);
+        if (window.pollForInputEvents(event)) handleEvent(event, window);
+
+        if (callDraw == 1) {
+            wireframeDraw(window);
+        }
+        if (callDraw == 2) {
+            rasterisedDraw(window);
+        }
+        if (callDraw == 3) {
+            draw(window);
+        }
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
     }
