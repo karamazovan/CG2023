@@ -18,14 +18,19 @@
 #define HEIGHT 240
 
 int callDraw = 0;
+bool ambient = true;
 bool orbitAnimation = true;
 float focalLength = 2.0f;
-glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
-glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 5.0f);
+glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.1f);
+glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 4.0f);
 glm::mat3 cameraOrientation = glm::mat3(1.0);
 
 int roundToInt(float value) {
     return int(std::round(value));
+}
+
+glm::vec3 modelTriangleNormal(ModelTriangle &triangle) {
+    return glm::normalize(glm::cross(triangle.vertices[1] - triangle.vertices[0], triangle.vertices[2] - triangle.vertices[0]));
 }
 
 std::vector<std::vector<float>> initialiseDepthBuffer(int width, int height) {
@@ -169,34 +174,7 @@ CanvasPoint getCanvasIntersectionPoint(glm::vec3 vertexPosition, float frame) {
     return result;
 }
 
-RayTriangleIntersection getClosetValidIntersection (std::vector<ModelTriangle> &modelTriangle, glm::vec3 &cameraPosition, glm::vec3 &rayDirection) {
-    RayTriangleIntersection closestIntersection;
-    closestIntersection.distanceFromCamera = INFINITY;
-    for (size_t i = 0; i < modelTriangle.size(); i++) {
-        ModelTriangle triangle = modelTriangle[i];
-        glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
-        glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
-        glm::vec3 SPVector = cameraPosition - triangle.vertices[0];
-        glm::mat3 DEMatrix(-rayDirection, e0, e1);
-        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
-
-        float t = possibleSolution[0];
-        float u = possibleSolution[1];
-        float v = possibleSolution[2];
-
-        if (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0 && (u + v) <= 1.0) {
-            if (t > 0 && t < closestIntersection.distanceFromCamera) {
-                glm::vec3 r = cameraPosition + t * rayDirection;
-                closestIntersection = RayTriangleIntersection(r, t, triangle, i);
-                closestIntersection.distanceFromCamera = t;
-            }
-        }
-    }
-    return closestIntersection;
-}
-
 void wireframeRender(std::vector<ModelTriangle> &modelTriangle, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
-    window.clearPixels();
     for (auto &triangle : modelTriangle) {
         CanvasTriangle canvasTriangle;
         for (int i = 0; i < 3; i++) {
@@ -230,8 +208,8 @@ void orbitCamera() {
     float speed = 0.5f;
     float theta = glm::radians(speed);
     glm::mat3 rotationMatrix = glm::mat3(glm::vec3(glm::cos(theta), 0, glm::sin(theta)),
-                                    glm::vec3(0, 1, 0),
-                                    glm::vec3(-glm::sin(theta), 0, glm::cos(theta)));
+                                         glm::vec3(0, 1, 0),
+                                         glm::vec3(-glm::sin(theta), 0, glm::cos(theta)));
     cameraPosition = rotationMatrix * cameraPosition;
     lookAt();
 }
@@ -261,6 +239,82 @@ void cameraRotation(float angleX, float angleY) {
     lookAt();
 }
 
+RayTriangleIntersection getClosestValidIntersection (std::vector<ModelTriangle> &modelTriangle, glm::vec3 &cameraPosition, glm::vec3 &rayDirection) {
+    RayTriangleIntersection closestIntersection;
+    closestIntersection.distanceFromCamera = INFINITY;
+
+    for (size_t i = 0; i < modelTriangle.size(); i++) {
+        ModelTriangle triangle = modelTriangle[i];
+        glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+        glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+        glm::vec3 SPVector = cameraPosition - triangle.vertices[0];
+        glm::mat3 DEMatrix(-rayDirection, e0, e1);
+        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+
+        float t = possibleSolution[0];
+        float u = possibleSolution[1];
+        float v = possibleSolution[2];
+
+        if (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0 && (u + v) <= 1.0) {
+            if (t > 0 && t < closestIntersection.distanceFromCamera) {
+                glm::vec3 r = cameraPosition + t * rayDirection;
+                closestIntersection = RayTriangleIntersection(r, t, triangle, i);
+                closestIntersection.distanceFromCamera = t;
+            }
+        }
+    }
+    return closestIntersection;
+}
+
+float proximityLighting(glm::vec3 point) {
+    float lightDistance = glm::length(lightPosition - point);
+    float lightIntensity = 20 / (4 * M_PI * lightDistance * lightDistance);
+    return std::min(lightIntensity, 1.0f);
+}
+
+float angleOfIncidence(glm::vec3 point, glm::vec3 normal) {
+    glm::vec3 lightDirection = glm::normalize(lightPosition - point);
+    float angleIncidence = glm::dot(normal, lightDirection);
+    angleIncidence = std::max(angleIncidence, 0.0f);
+    float lightDistance = glm::distance(lightPosition, point);
+    float brightness = 1.0f / (lightDistance * lightDistance);
+    return std::min(brightness * angleIncidence, 1.0f);
+}
+
+glm::vec3 pixelToDirection(int x, int y) {
+    float xNormalise = (x - WIDTH / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
+    float yNormalise = (y - HEIGHT / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
+    glm::vec3 pixelPosition = cameraPosition + cameraOrientation * glm::vec3(xNormalise, -yNormalise, -focalLength);
+    return glm::normalize(pixelPosition - cameraPosition);
+}
+
+void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            // converting from 2D pixel into 3D direction
+            glm::vec3 rayDirection = pixelToDirection(x, y);
+            RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelTriangle, cameraPosition,rayDirection);
+
+            glm::vec3 lightDirection = glm::normalize(closestIntersection.intersectionPoint - lightPosition);
+            RayTriangleIntersection lightIntersection = getClosestValidIntersection(modelTriangle, lightPosition, lightDirection);
+
+            if (closestIntersection.distanceFromCamera != INFINITY) {
+                glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
+                float proximity = proximityLighting(closestIntersection.intersectionPoint);
+                float angleIncidence = angleOfIncidence(closestIntersection.intersectionPoint, normal);
+                float brightness = proximity * angleIncidence;
+
+                Colour colour = closestIntersection.intersectedTriangle.colour;
+                colour.red *= brightness;
+                colour.green *=  brightness;
+                colour.blue *=  brightness;
+                uint32_t packedColour = colourPalette(colour);
+                window.setPixelColour(x, y, packedColour);
+            }
+        }
+    }
+}
+
 std::map<std::string, Colour> readMTL(const std::string &fileName) {
     std::map<std::string, Colour> readPalette;
     std::ifstream file(fileName);
@@ -284,7 +338,6 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<s
     std::ifstream file(fileName);
     std::string line;
     Colour colour;
-
     while(std::getline(file, line)) {
         std::vector<std::string> tokens = split(line, ' ');
         if (tokens.empty()) continue;
@@ -306,41 +359,12 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<s
     return triangles;
 }
 
-glm::vec3 pixelToDirection(int x, int y, glm::vec3 &cameraPosition, glm::mat3 &cameraOrientation, float focalLenegth) {
-    float xNormalise = (x - WIDTH / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
-    float yNormalise = (y - HEIGHT / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
-    glm::vec3 pixelPosition = cameraPosition + cameraOrientation * glm::vec3(xNormalise, -yNormalise, -focalLenegth);
-    glm::vec3 rayDirection = glm::normalize(pixelPosition - cameraPosition);
-    return rayDirection;
-}
-
-void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-            // converting from 2D pixel into 3D direction
-            glm::vec3 rayDirection = pixelToDirection(x, y, cameraPosition, cameraOrientation, focalLength);
-            RayTriangleIntersection closestIntersection = getClosetValidIntersection(modelTriangle, cameraPosition,rayDirection);
-
-            glm::vec3 lightDirection = glm::normalize(closestIntersection.intersectionPoint - lightPosition);
-            RayTriangleIntersection lightIntersection = getClosetValidIntersection(modelTriangle, lightPosition, lightDirection);
-
-            if (closestIntersection.distanceFromCamera != INFINITY) {
-                if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
-                    uint32_t colour = colourPalette(closestIntersection.intersectedTriangle.colour);
-                    window.setPixelColour(x, y, colour);
-                }
-            }
-        }
-    }
-}
-
 void wireframeDraw(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
     std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
     wireframeRender(modelTriangle, depthBuffer, window);
-
 }
 
 void rasterisedDraw(DrawingWindow &window) {
@@ -429,7 +453,8 @@ int main(int argc, char *argv[]) {
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, window);
-
+        draw(window);
+        /*
         if (callDraw == 1) {
             wireframeDraw(window);
         }
@@ -439,6 +464,7 @@ int main(int argc, char *argv[]) {
         if (callDraw == 3) {
             draw(window);
         }
+         */
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
     }
