@@ -307,38 +307,39 @@ void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle,  std::vector
 }
 
 void drawRasterisedSceneWithShadow(std::vector<ModelTriangle> &modelTriangle, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    glm::vec3 ambientLighting(0.1f, 0.1f, 0.1f);
+
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             glm::vec3 rayDirection = pixelToDirection(x, y);
             RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelTriangle, cameraPosition,rayDirection);
 
-            glm::vec3 toLight = lightPosition - closestIntersection.intersectionPoint;
-            glm::vec3 lightDirection = glm::normalize(toLight);
-            glm::vec3 shadowRay = closestIntersection.intersectionPoint + lightDirection * 0.001f;
-            RayTriangleIntersection shadowIntersection = getClosestValidIntersection(modelTriangle, shadowRay, lightDirection);
-            RayTriangleIntersection lightIntersection = getClosestValidIntersection(modelTriangle, lightPosition, -lightDirection);
-
-            Colour colour = closestIntersection.intersectedTriangle.colour;
-            glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
-
-            float proximityIntensity = proximityLighting(closestIntersection.intersectionPoint);
-            float diffuseIntensity = angleOfIncidenceLighting(closestIntersection.intersectionPoint, normal);
-            float specularIntensity = specularLighting(closestIntersection.intersectionPoint, normal);
-            float light = (proximityIntensity * diffuseIntensity) + specularIntensity;
-
             if (closestIntersection.distanceFromCamera != INFINITY) {
-                /* if (shadowIntersection.distanceFromCamera < glm::length(toLight) && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
-                    colour.red *= 0.5;
-                    colour.green *= 0.5;
-                    colour.blue *= 0.5;
-                } */
-                // if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
-                    colour.red *= light;
-                    colour.green *= light;
-                    colour.blue *= light;
-                    uint32_t packedColour = colourPalette(colour);
-                    window.setPixelColour(x, y, packedColour);
-                // }
+                Colour colour = closestIntersection.intersectedTriangle.colour;
+                glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
+                glm::vec3 lightRay = lightPosition - closestIntersection.intersectionPoint;
+                float lightDistance = glm::length(lightRay);
+                glm::vec3 lightDirection = glm::normalize(lightRay);
+                glm::vec3 shadowRay = closestIntersection.intersectionPoint + lightDirection * 0.001f;
+                RayTriangleIntersection shadowIntersection = getClosestValidIntersection(modelTriangle, shadowRay, lightDirection);
+
+                float shadowFactor = 1.0f;
+
+                if (shadowIntersection.distanceFromCamera < lightDistance && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
+                    shadowFactor = 0.5f;
+                }
+
+                float proximityIntensity = proximityLighting(closestIntersection.intersectionPoint);
+                float diffuseIntensity = angleOfIncidenceLighting(closestIntersection.intersectionPoint, normal);
+                float specularIntensity = specularLighting(closestIntersection.intersectionPoint, normal);
+
+                glm::vec3 colourVec3 = glm::vec3(colour.red, colour.green, colour.blue);
+                glm::vec3 lightingVec3 = (colourVec3 * (proximityIntensity * diffuseIntensity) + glm::vec3(255.0f) * specularIntensity) * shadowFactor;
+                glm::vec3 ambient = colourVec3 * glm::vec3(ambientLighting);
+                glm::vec3 lightingColour = glm::clamp(lightingVec3 + ambient, 0.0f, 255.0f);
+
+                Colour combinedColour = Colour(lightingColour.x, lightingColour.y, lightingColour.z);
+                window.setPixelColour(x, y, colourPalette(combinedColour));
             }
         }
     }
