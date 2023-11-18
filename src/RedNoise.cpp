@@ -21,7 +21,7 @@ int callDraw = 0;
 bool orbitAnimation = true;
 float focalLength = 2.0f;
 glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
-glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 5.0f);
+glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 4.0f);
 glm::mat3 cameraOrientation = glm::mat3(1.0);
 
 int roundToInt(float value) {
@@ -264,6 +264,12 @@ RayTriangleIntersection getClosestValidIntersection(std::vector<ModelTriangle> &
     return closestIntersection;
 }
 
+float proximityLighting(glm::vec3 point) {
+    float lightDistance = glm::length(lightPosition - point);
+    float lightIntensity = 1.0f / (4.0f * M_PI * lightDistance * lightDistance);
+    return glm::clamp(lightIntensity, 0.0f, 1.0f);
+}
+
 glm::vec3 pixelToDirection(int x, int y) {
     float xNormalise = (x - WIDTH / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
     float yNormalise = (y - HEIGHT / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
@@ -286,6 +292,9 @@ void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle, std::vector<
 
             Colour colour = closestIntersection.intersectedTriangle.colour;
             //glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
+
+            float proximityIntensity = proximityLighting(closestIntersection.intersectionPoint);
+
             if (closestIntersection.distanceFromCamera != INFINITY) {
                 if (shadowIntersection.distanceFromCamera < glm::length(toLight) && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
                     colour.red *= 0.5;
@@ -293,6 +302,9 @@ void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle, std::vector<
                     colour.blue *= 0.5;
                 }
                 if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
+                    colour.red *= proximityIntensity;
+                    colour.green *= proximityIntensity;
+                    colour.blue *= proximityIntensity;
                     uint32_t packedColour = colourPalette(colour);
                     window.setPixelColour(x, y, packedColour);
                 }
@@ -374,6 +386,7 @@ void draw(DrawingWindow &window) {
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
     if (event.type == SDL_KEYDOWN) {
+        float lightMoveSpeed = 0.1f;
         float translationSpeed = 0.1f;
         float rotationSpeed = 2.0f;
         if (event.key.keysym.sym == SDLK_LEFT) {
@@ -415,6 +428,24 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
         else if (event.key.keysym.sym == SDLK_o) {
             orbitAnimation = !orbitAnimation;
             std::cout << "Orbit Camera " << (orbitAnimation ? "ON" : "OFF") << std::endl;
+        }
+        else if (event.key.keysym.sym == SDLK_a) {
+            lightPosition.x -= lightMoveSpeed;
+        }
+        else if (event.key.keysym.sym == SDLK_d) {
+            lightPosition.x += lightMoveSpeed;
+        }
+        else if (event.key.keysym.sym == SDLK_w) {
+            lightPosition.y += lightMoveSpeed;
+        }
+        else if (event.key.keysym.sym == SDLK_s) {
+            lightPosition.y -= lightMoveSpeed;
+        }
+        else if (event.key.keysym.sym == SDLK_q) {
+            lightPosition.z -= lightMoveSpeed;
+        }
+        else if (event.key.keysym.sym == SDLK_e) {
+            lightPosition.z += lightMoveSpeed;
         }
         else if (event.key.keysym.sym == SDLK_1) {
             callDraw = 1;
