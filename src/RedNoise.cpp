@@ -266,8 +266,15 @@ RayTriangleIntersection getClosestValidIntersection(std::vector<ModelTriangle> &
 
 float proximityLighting(glm::vec3 point) {
     float lightDistance = glm::length(lightPosition - point);
-    float lightIntensity = 1.0f / (4.0f * M_PI * lightDistance * lightDistance);
+    float lightIntensity = 10.0f / (4.0f * M_PI * lightDistance * lightDistance);
     return glm::clamp(lightIntensity, 0.0f, 1.0f);
+}
+
+float angleOfIncidenceLighting(glm::vec3 point, glm::vec3 normal) {
+    glm::vec3 lightDirection = glm::normalize(lightPosition - point);
+    float angleIncidence = glm::dot(normal, lightDirection);
+    float diffuseIntensity = std::max(angleIncidence, 0.0f);
+    return diffuseIntensity;
 }
 
 glm::vec3 pixelToDirection(int x, int y) {
@@ -291,23 +298,27 @@ void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle, std::vector<
             RayTriangleIntersection lightIntersection = getClosestValidIntersection(modelTriangle, lightPosition, -lightDirection);
 
             Colour colour = closestIntersection.intersectedTriangle.colour;
-            //glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
+            glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
 
             float proximityIntensity = proximityLighting(closestIntersection.intersectionPoint);
+            float diffuseIntensity = angleOfIncidenceLighting(closestIntersection.intersectionPoint, normal);
+            float light = proximityIntensity * diffuseIntensity;
 
             if (closestIntersection.distanceFromCamera != INFINITY) {
+                /*
                 if (shadowIntersection.distanceFromCamera < glm::length(toLight) && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
                     colour.red *= 0.5;
                     colour.green *= 0.5;
                     colour.blue *= 0.5;
                 }
-                if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
-                    colour.red *= proximityIntensity;
-                    colour.green *= proximityIntensity;
-                    colour.blue *= proximityIntensity;
+                */
+                // if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
+                    colour.red *= light;
+                    colour.green *= light;
+                    colour.blue *= light;
                     uint32_t packedColour = colourPalette(colour);
                     window.setPixelColour(x, y, packedColour);
-                }
+                // }
             }
         }
     }
