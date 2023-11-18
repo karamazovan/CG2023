@@ -277,6 +277,14 @@ float angleOfIncidenceLighting(glm::vec3 point, glm::vec3 normal) {
     return diffuseIntensity;
 }
 
+float specularLighting(glm::vec3 point, glm::vec3 normal) {
+    glm::vec3 cameraDirection = glm::normalize(cameraPosition - point);
+    glm::vec3 lightDirection = glm::normalize(lightPosition - point);
+    glm::vec3 reflectionDirection = glm::reflect(-lightDirection, normal);
+    float specularIntensity = pow(std::max(glm::dot(cameraDirection, reflectionDirection), 0.0f), 256);
+    return specularIntensity;
+}
+
 glm::vec3 pixelToDirection(int x, int y) {
     float xNormalise = (x - WIDTH / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
     float yNormalise = (y - HEIGHT / 2.0f) * (1.0f / (HEIGHT * 2.0f/3.0f));
@@ -284,10 +292,23 @@ glm::vec3 pixelToDirection(int x, int y) {
     return glm::normalize(pixelPosition - cameraPosition);
 }
 
-void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             // converting from 2D pixel into 3D direction
+            glm::vec3 rayDirection = pixelToDirection(x, y);
+            RayTriangleIntersection intersectioPoint = getClosestValidIntersection(modelTriangle, cameraPosition, rayDirection);
+            if (intersectioPoint.distanceFromCamera != INFINITY) {
+                uint32_t colour = colourPalette(intersectioPoint.intersectedTriangle.colour);
+                window.setPixelColour(x, y, colour);
+            }
+        }
+    }
+}
+
+void drawRasterisedSceneWithShadow(std::vector<ModelTriangle> &modelTriangle, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
             glm::vec3 rayDirection = pixelToDirection(x, y);
             RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelTriangle, cameraPosition,rayDirection);
 
@@ -302,16 +323,15 @@ void drawRasterisedScene(std::vector<ModelTriangle> &modelTriangle, std::vector<
 
             float proximityIntensity = proximityLighting(closestIntersection.intersectionPoint);
             float diffuseIntensity = angleOfIncidenceLighting(closestIntersection.intersectionPoint, normal);
-            float light = proximityIntensity * diffuseIntensity;
+            float specularIntensity = specularLighting(closestIntersection.intersectionPoint, normal);
+            float light = (proximityIntensity * diffuseIntensity) + specularIntensity;
 
             if (closestIntersection.distanceFromCamera != INFINITY) {
-                /*
-                if (shadowIntersection.distanceFromCamera < glm::length(toLight) && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
+                /* if (shadowIntersection.distanceFromCamera < glm::length(toLight) && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
                     colour.red *= 0.5;
                     colour.green *= 0.5;
                     colour.blue *= 0.5;
-                }
-                */
+                } */
                 // if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
                     colour.red *= light;
                     colour.green *= light;
@@ -387,13 +407,22 @@ void rasterisedDraw(DrawingWindow &window) {
     }
 }
 
-void draw(DrawingWindow &window) {
+void drawRasterised(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
     std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
     drawRasterisedScene(modelTriangle, depthBuffer, window);
 }
+
+void draw(DrawingWindow &window) {
+    window.clearPixels();
+    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
+    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
+    std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35);
+    drawRasterisedSceneWithShadow(modelTriangle, depthBuffer, window);
+}
+
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
     if (event.type == SDL_KEYDOWN) {
@@ -467,6 +496,9 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
         else if (event.key.keysym.sym == SDLK_3) {
             callDraw = 3;
         }
+        else if (event.key.keysym.sym == SDLK_4) {
+            callDraw = 4;
+        }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         window.savePPM("output.ppm");
         window.saveBMP("output.bmp");
@@ -490,7 +522,10 @@ int main(int argc, char *argv[]) {
             rasterisedDraw(window);
         }
         if (callDraw == 3) {
-            draw(window);
+             drawRasterised(window);
+        }
+         if (callDraw == 4) {
+             draw(window);
         }
         */
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
