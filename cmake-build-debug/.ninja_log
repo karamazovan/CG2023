@@ -10,3 +10,6 @@
 99	1573	7191764824883772	CMakeFiles/RedNoise.dir/libs/sdw/DrawingWindow.cpp.obj	f616a3e214497579
 23	2641	7194675526894594	CMakeFiles/RedNoise.dir/src/RedNoise.cpp.obj	29dd4404273605f2
 4	2550	7209107013651053	CMakeFiles/RedNoise.dir/src/RedNoise.cpp.obj	29dd4404273605f2
+36	1805	7222001446214691	CMakeFiles/RedNoise.dir/libs/sdw/RayTriangleIntersection.cpp.obj	b9809ff580f516bb
+7	1806	7222001446214691	CMakeFiles/RedNoise.dir/libs/sdw/ModelTriangle.cpp.obj	2baa5183e3f38aaf
+53	2613	7222001454230671	CMakeFiles/RedNoise.dir/src/RedNoise.cpp.obj	29dd4404273605f2
