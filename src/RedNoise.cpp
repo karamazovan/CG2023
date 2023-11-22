@@ -19,11 +19,12 @@
 #define HEIGHT 240
 
 int callDraw = 0;
-bool orbitAnimation = true;
 float focalLength = 2.0f;
-glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
-glm::vec3 cameraPosition = glm::vec3(0.0f, 0.7f, 2.5f);
+bool orbitAnimation = true;
+glm::vec3 ambientLighting(0.2f, 0.2f, 0.2f);
 glm::mat3 cameraOrientation = glm::mat3(1.0);
+glm::vec3 cameraPosition = glm::vec3(0.0f, 0.7f, 2.5f);
+glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
 
 int roundToInt(float value) {
     return int(std::round(value));
@@ -31,6 +32,44 @@ int roundToInt(float value) {
 
 glm::vec3 modelTriangleNormal(ModelTriangle &triangle) {
     return glm::normalize(glm::cross(triangle.vertices[1] - triangle.vertices[0], triangle.vertices[2] - triangle.vertices[0]));
+}
+
+std::vector<std::vector<float>> initialiseDepthBuffer(int width, int height) {
+    std::vector<std::vector<float>> depthBuffer;
+    for (int y = 0; y < height; y++) {
+        std::vector<float> row;
+        for (int x = 0; x < width; x++) {
+            row.push_back(0);
+        }
+        depthBuffer.push_back(row);
+    }
+    return depthBuffer;
+}
+
+std::vector<float> interpolateSingleFloats(float from, float to, size_t numberOfValues) {
+    std::vector<float> result;
+    if (numberOfValues == 0) {
+        result.push_back(from);
+        return result;
+    }
+    float betweenValue = (to - from) / float(numberOfValues - 1);
+    for (size_t i = 0; i < numberOfValues; i++) {
+        result.push_back(from + float(i) * betweenValue);
+    }
+    return result;
+}
+
+std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, size_t numberOfVectors) {
+    std::vector<glm::vec3> result;
+    if (numberOfVectors == 0) {
+        result.push_back(from);
+        return result;
+    }
+    glm::vec3 betweenValue = (to - from) / glm::vec3(numberOfVectors - 1);
+    for (size_t i = 0; i < numberOfVectors; i++) {
+        result.push_back(from + betweenValue * glm::vec3(i));
+    }
+    return result;
 }
 
 std::map<std::string, Colour> readMTL(const std::string &fileName) {
@@ -78,44 +117,6 @@ std::vector<ModelTriangle> readOBJ(const std::string &fileName, const std::map<s
     return triangles;
 }
 
-std::vector<std::vector<float>> initialiseDepthBuffer(int width, int height) {
-    std::vector<std::vector<float>> depthBuffer;
-    for (int y = 0; y < height; y++) {
-        std::vector<float> row;
-        for (int x = 0; x < width; x++) {
-            row.push_back(0);
-        }
-        depthBuffer.push_back(row);
-    }
-    return depthBuffer;
-}
-
-std::vector<float> interpolateSingleFloats(float from, float to, size_t numberOfValues) {
-    std::vector<float> result;
-    if (numberOfValues == 0) {
-        result.push_back(from);
-        return result;
-    }
-    float betweenValue = (to - from) / float(numberOfValues - 1);
-    for (size_t i = 0; i < numberOfValues; i++) {
-        result.push_back(from + float(i) * betweenValue);
-    }
-    return result;
-}
-
-std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, size_t numberOfVectors) {
-    std::vector<glm::vec3> result;
-    if (numberOfVectors == 0) {
-        result.push_back(from);
-        return result;
-    }
-    glm::vec3 betweenValue = (to - from) / glm::vec3(numberOfVectors - 1);
-    for (size_t i = 0; i < numberOfVectors; i++) {
-        result.push_back(from + betweenValue * glm::vec3(i));
-    }
-    return result;
-}
-
 uint32_t colourPalette(Colour colour) {
     return (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 }
@@ -145,7 +146,7 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, std::vector<std::
     float yStepSize = yDiff / numberOfSteps;
     float zStepSize = zDiff / numberOfSteps;
 
-    for (float i= 0.0; i <= numberOfSteps; i++) {
+    for (float i = 0.0; i <= numberOfSteps; i++) {
         float x = from.x + (xStepSize * i);
         float y = from.y + (yStepSize * i);
         float z = 1 / (from.depth + (zStepSize * i));
@@ -373,20 +374,19 @@ void rasterisedSceneWithShadow(std::vector<ModelTriangle> &modelTriangle,  std::
 }
 
 void rasterisedSceneWithLighting(std::vector<ModelTriangle> &modelTriangle, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
-    glm::vec3 ambientLighting(0.2f, 0.2f, 0.2f);
-
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             glm::vec3 rayDirection = pixelToDirection(x, y);
             RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelTriangle, cameraPosition,rayDirection);
+            Colour colour = closestIntersection.intersectedTriangle.colour;
+            glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
 
             if (closestIntersection.distanceFromCamera != INFINITY) {
-                Colour colour = closestIntersection.intersectedTriangle.colour;
-                glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
-                glm::vec3 lightRay = lightPosition - closestIntersection.intersectionPoint;
+                glm::vec3 intersectionPoint = closestIntersection.intersectionPoint;
+                glm::vec3 lightRay = lightPosition - intersectionPoint;
                 float lightDistance = glm::length(lightRay);
                 glm::vec3 lightDirection = glm::normalize(lightRay);
-                glm::vec3 shadowRay = closestIntersection.intersectionPoint + lightDirection * 0.001f;
+                glm::vec3 shadowRay = intersectionPoint + lightDirection * 0.001f;
                 RayTriangleIntersection shadowIntersection = getClosestValidIntersection(modelTriangle, shadowRay, lightDirection);
                 float shadowFactor = 1.0f;
 
@@ -394,9 +394,9 @@ void rasterisedSceneWithLighting(std::vector<ModelTriangle> &modelTriangle, std:
                     shadowFactor = 0.5f;
                 }
 
-                float proximityIntensity = proximityLighting(closestIntersection.intersectionPoint);
-                float diffuseIntensity = angleOfIncidenceLighting(closestIntersection.intersectionPoint, normal);
-                float specularIntensity = specularLighting(closestIntersection.intersectionPoint, normal);
+                float proximityIntensity = proximityLighting(intersectionPoint);
+                float diffuseIntensity = angleOfIncidenceLighting(intersectionPoint, normal);
+                float specularIntensity = specularLighting(intersectionPoint, normal);
 
                 glm::vec3 colourVec3 = glm::vec3(colour.red, colour.green, colour.blue);
                 glm::vec3 lightingVec3 = (colourVec3 * (proximityIntensity * diffuseIntensity) + glm::vec3(255.0f) * specularIntensity) * shadowFactor;
@@ -428,7 +428,13 @@ std::vector<ModelTriangle> readSphereOBJ(const std::string &fileName, const std:
                                          scalingFactor * std::stof(tokens[2]),
                                          scalingFactor * std::stof(tokens[3]));
             vertices.push_back(vertex);
-        } else if (tokens[0] == "f") {
+        }
+    }
+    file.clear();
+    file.seekg(0);
+    while (std::getline(file, line)) {
+        std::vector<std::string> tokens = split(line, ' ');
+        if (tokens[0] == "f") {
             int v0 = std::stoi(split(tokens[1], '/')[0]) - 1;
             int v1 = std::stoi(split(tokens[2], '/')[0]) - 1;
             int v2 = std::stoi(split(tokens[3], '/')[0]) - 1;
@@ -441,46 +447,110 @@ std::vector<ModelTriangle> readSphereOBJ(const std::string &fileName, const std:
     return triangles;
 }
 
-glm::vec3 vertexNormal(glm::vec3 &vertex, std::vector<ModelTriangle> &modelSphere) {
+glm::vec3 surfaceNormal(ModelTriangle &triangle) {
+    glm::vec3 v0 = triangle.vertices[0];
+    glm::vec3 v1 = triangle.vertices[1];
+    glm::vec3 v2 = triangle.vertices[2];
+
+    glm::vec3 edge1 = v1 - v0;
+    glm::vec3 edge2 = v2 - v0;
+
+    return glm::normalize(glm::cross(edge1, edge2));
+}
+
+glm::vec3 vertexNormals(glm::vec3 &vertex, std::vector<ModelTriangle> &modelSphere) {
     glm::vec3 vertexNormal(0.0f, 0.0f, 0.0f);
     int count = 0;
     for (ModelTriangle &triangle : modelSphere) {
-        if (triangle.vertices[0] == vertex || triangle.vertices[1] == vertex || triangle.vertices[2] == vertex) {
-            vertexNormal += triangle.normal;
-            count++;
+        for (int i = 0; i < 3; i++) {
+            if (glm::all(glm::equal(triangle.vertices[i], vertex))) {
+                vertexNormal += surfaceNormal(triangle);
+                count++;
+            }
         }
     }
     if (count > 0) {
         vertexNormal /= float(count);
+        vertexNormal = glm::normalize(vertexNormal);
     }
-    return glm::normalize(vertexNormal);
+    return vertexNormal;
 }
 
-void sphereRasterisedScene(std::vector<ModelTriangle> &modelSphere, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
-    glm::vec3 ambientLighting(0.2f, 0.2f, 0.2f);
+glm::vec3 barycentricCoordinates(int x, int y, ModelTriangle &triangle) {
+    glm::vec3 v0 = triangle.vertices[1] - triangle.vertices[0];
+    glm::vec3 v1 = triangle.vertices[2] - triangle.vertices[0];
+    glm::vec3 v2 = glm::vec3(x, y, 0) - glm::vec3(triangle.vertices[0].x, triangle.vertices[0].y, 0);
 
+    float dot00 = glm::dot(v0, v0);
+    float dot01 = glm::dot(v0, v1);
+    float dot11 = glm::dot(v1, v1);
+    float dot20 = glm::dot(v2, v0);
+    float dot21 = glm::dot(v2, v1);
+    float dotNormal = dot00 * dot11 - dot01 * dot01;
+
+    float v = (dot11 * dot20 - dot01 * dot21) / dotNormal;
+    float w = (dot00 * dot21 - dot01 * dot20) / dotNormal;
+    float u = 1.0f - v - w;
+
+    return glm::vec3(u, v, w);
+}
+
+Colour colourForLighting(Colour &colour, float lightIntensity, glm::vec3 &ambientLighting) {
+    int red = std::min(roundToInt(colour.red * lightIntensity + 255 * ambientLighting.x), 255);
+    int green = std::min(roundToInt(colour.green * lightIntensity + 255 * ambientLighting.y), 255);
+    int blue = std::min(roundToInt(colour.blue * lightIntensity + 255 * ambientLighting.z), 255);
+    return Colour(red, green, blue);
+}
+
+void sphereRasterisedSceneWithGourandShading(std::vector<ModelTriangle> &modelSphere, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            glm::vec3 rayDirection = pixelToDirection(x, y);
+            RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelSphere, cameraPosition, rayDirection);
+            Colour colour = closestIntersection.intersectedTriangle.colour;
+            glm::vec3 intersectionPoint = closestIntersection.intersectionPoint;
+
+            if (closestIntersection.distanceFromCamera != INFINITY) {
+               auto &triangle = closestIntersection.intersectedTriangle;
+               glm::vec3 barycentric = barycentricCoordinates(x, y, triangle);
+
+               glm::vec3 interpolatedNormal = glm::normalize(barycentric.x * vertexNormals(triangle.vertices[0], modelSphere) +
+                       barycentric.y * vertexNormals(triangle.vertices[1], modelSphere) + barycentric.z * vertexNormals(triangle.vertices[2], modelSphere));
+
+                float interpolatedIntensity = proximityLighting(intersectionPoint) *
+                                              angleOfIncidenceLighting(intersectionPoint, interpolatedNormal) +
+                                              specularLighting(intersectionPoint, interpolatedNormal);
+
+                Colour combinedColour = colourForLighting(colour, interpolatedIntensity, ambientLighting);
+                window.setPixelColour(x, y, colourPalette(combinedColour));
+            }
+        }
+    }
+}
+
+void sphereRasterisedSceneWithFlat(std::vector<ModelTriangle> &modelSphere, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             glm::vec3 rayDirection = pixelToDirection(x, y);
             RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelSphere, cameraPosition,rayDirection);
+            Colour colour = closestIntersection.intersectedTriangle.colour;
+            glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
 
             if (closestIntersection.distanceFromCamera != INFINITY) {
-                Colour colour = closestIntersection.intersectedTriangle.colour;
-                glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
-                glm::vec3 lightRay = lightPosition - closestIntersection.intersectionPoint;
+                glm::vec3 intersectionPoint = closestIntersection.intersectionPoint;
+                glm::vec3 lightRay = lightPosition - intersectionPoint;
                 float lightDistance = glm::length(lightRay);
                 glm::vec3 lightDirection = glm::normalize(lightRay);
-                glm::vec3 shadowRay = closestIntersection.intersectionPoint + lightDirection * 0.001f;
+                glm::vec3 shadowRay = intersectionPoint + lightDirection * 0.001f;
                 RayTriangleIntersection shadowIntersection = getClosestValidIntersection(modelSphere, shadowRay, lightDirection);
                 float shadowFactor = 1.0f;
 
                 if (shadowIntersection.distanceFromCamera < lightDistance && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
                     shadowFactor = 0.5f;
                 }
-
-                float proximityIntensity = proximityLighting(closestIntersection.intersectionPoint);
-                float diffuseIntensity = angleOfIncidenceLighting(closestIntersection.intersectionPoint, normal);
-                float specularIntensity = specularLighting(closestIntersection.intersectionPoint, normal);
+                float proximityIntensity = proximityLighting(intersectionPoint);
+                float diffuseIntensity = angleOfIncidenceLighting(intersectionPoint, normal);
+                float specularIntensity = specularLighting(intersectionPoint, normal);
 
                 glm::vec3 colourVec3 = glm::vec3(colour.red, colour.green, colour.blue);
                 glm::vec3 lightingVec3 = (colourVec3 * (proximityIntensity * diffuseIntensity) + glm::vec3(255.0f) * specularIntensity) * shadowFactor;
@@ -539,13 +609,22 @@ void drawLighting(DrawingWindow &window) {
     rasterisedSceneWithLighting(modelTriangle, depthBuffer, window);
 }
 
-void drawSphere(DrawingWindow &window) {
+void drawSphereWithFlat(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
     std::vector<ModelTriangle> readSphere = readSphereOBJ("./src/sphere.obj", readPalette, 0.50f);
-    sphereRasterisedScene(readSphere, depthBuffer, window);
+    sphereRasterisedSceneWithFlat(readSphere, depthBuffer, window);
 }
+
+void drawSphereWithGourandShading (DrawingWindow &window) {
+    window.clearPixels();
+    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
+    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
+    std::vector<ModelTriangle> readSphere = readSphereOBJ("./src/sphere.obj", readPalette, 0.50f);
+    sphereRasterisedSceneWithGourandShading(readSphere, depthBuffer, window);
+}
+
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
     if (event.type == SDL_KEYDOWN) {
@@ -639,7 +718,8 @@ int main(int argc, char *argv[]) {
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, window);
-        drawSphere(window);
+        // drawSphereWithFlat(window);
+        drawSphereWithGourandShading(window);
 
         /*
         if (callDraw == 1) {
