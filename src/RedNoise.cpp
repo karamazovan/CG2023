@@ -491,8 +491,16 @@ void sphereRasterisedSceneWithGourandShading(std::vector<ModelTriangle> &modelSp
                 float w = 1 - u - v;
                 glm::vec3 pointNormal = u * n0 + v * n1 + w * n2;
 
-                float interpolatedLighting = proximityLighting(intersectionPoint) * angleOfIncidenceLighting(intersectionPoint, pointNormal) + specularLighting(intersectionPoint, pointNormal);
-                Colour combinedColour = colourForLighting(colour, interpolatedLighting, ambientLighting);
+                float proximityIntensity = proximityLighting(intersectionPoint);
+                float diffuseIntensity = angleOfIncidenceLighting(intersectionPoint, pointNormal);
+                float specularIntensity = specularLighting(intersectionPoint, pointNormal);
+
+                glm::vec3 colourVec3 = glm::vec3(colour.red, colour.green, colour.blue);
+                glm::vec3 lightingVec3 = (colourVec3 * (proximityIntensity * diffuseIntensity) + glm::vec3(255.0f) * specularIntensity);
+                glm::vec3 ambient = colourVec3 * glm::vec3(ambientLighting);
+                glm::vec3 lightingColour = glm::clamp(lightingVec3 + ambient, 0.0f, 255.0f);
+
+                Colour combinedColour = Colour(roundToInt(lightingColour.x), roundToInt(lightingColour.y), roundToInt(lightingColour.z));
                 window.setPixelColour(x, y, colourPalette(combinedColour));
             }
         }
