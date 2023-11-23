@@ -459,13 +459,6 @@ glm::vec3 vertexNormals(glm::vec3 &vertex, std::vector<ModelTriangle> &modelSphe
     return count > 0 ? glm::normalize(vertexNormal / float(count)) : glm::vec3(0.0f, 0.0f, 0.0f);
 }
 
-Colour colourForLighting(Colour &colour, float lightIntensity, glm::vec3 &ambientLighting) {
-    int red = std::min(roundToInt(colour.red * lightIntensity + 255 * ambientLighting.x), 255);
-    int green = std::min(roundToInt(colour.green * lightIntensity + 255 * ambientLighting.y), 255);
-    int blue = std::min(roundToInt(colour.blue * lightIntensity + 255 * ambientLighting.z), 255);
-    return Colour(red, green, blue);
-}
-
 void sphereRasterisedSceneWithGourandShading(std::vector<ModelTriangle> &modelSphere, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
