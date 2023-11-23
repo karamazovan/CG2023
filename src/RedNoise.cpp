@@ -301,10 +301,10 @@ RayTriangleIntersection getClosestValidIntersection(std::vector<ModelTriangle> &
         float v = possibleSolution[2];
 
         if (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0 && (u + v) <= 1.0) {
-            glm::vec3 r = cameraPosition + t * rayDirection;
             if (t > 0 && t < closestIntersection.distanceFromCamera) {
-                closestIntersection = RayTriangleIntersection(r, t, triangle, i);
                 closestIntersection.distanceFromCamera = t;
+                glm::vec3 r = cameraPosition + t * rayDirection;
+                closestIntersection = RayTriangleIntersection(r, t, triangle, i);
             }
         }
     }
@@ -447,52 +447,16 @@ std::vector<ModelTriangle> readSphereOBJ(const std::string &fileName, const std:
     return triangles;
 }
 
-glm::vec3 surfaceNormal(ModelTriangle &triangle) {
-    glm::vec3 v0 = triangle.vertices[0];
-    glm::vec3 v1 = triangle.vertices[1];
-    glm::vec3 v2 = triangle.vertices[2];
-
-    glm::vec3 edge1 = v1 - v0;
-    glm::vec3 edge2 = v2 - v0;
-
-    return glm::normalize(glm::cross(edge1, edge2));
-}
-
 glm::vec3 vertexNormals(glm::vec3 &vertex, std::vector<ModelTriangle> &modelSphere) {
     glm::vec3 vertexNormal(0.0f, 0.0f, 0.0f);
     int count = 0;
     for (ModelTriangle &triangle : modelSphere) {
-        for (int i = 0; i < 3; i++) {
-            if (glm::all(glm::equal(triangle.vertices[i], vertex))) {
-                vertexNormal += surfaceNormal(triangle);
+        if (std::find(triangle.vertices.begin(), triangle.vertices.end(), vertex) != triangle.vertices.end()) {
+                vertexNormal += triangle.normal;
                 count++;
-            }
         }
     }
-    if (count > 0) {
-        vertexNormal /= float(count);
-        vertexNormal = glm::normalize(vertexNormal);
-    }
-    return vertexNormal;
-}
-
-glm::vec3 barycentricCoordinates(int x, int y, ModelTriangle &triangle) {
-    glm::vec3 v0 = triangle.vertices[1] - triangle.vertices[0];
-    glm::vec3 v1 = triangle.vertices[2] - triangle.vertices[0];
-    glm::vec3 v2 = glm::vec3(x, y, 0) - glm::vec3(triangle.vertices[0].x, triangle.vertices[0].y, 0);
-
-    float dot00 = glm::dot(v0, v0);
-    float dot01 = glm::dot(v0, v1);
-    float dot11 = glm::dot(v1, v1);
-    float dot20 = glm::dot(v2, v0);
-    float dot21 = glm::dot(v2, v1);
-    float dotNormal = dot00 * dot11 - dot01 * dot01;
-
-    float v = (dot11 * dot20 - dot01 * dot21) / dotNormal;
-    float w = (dot00 * dot21 - dot01 * dot20) / dotNormal;
-    float u = 1.0f - v - w;
-
-    return glm::vec3(u, v, w);
+    return count > 0 ? glm::normalize(vertexNormal / float(count)) : glm::vec3(0.0f, 0.0f, 0.0f);
 }
 
 Colour colourForLighting(Colour &colour, float lightIntensity, glm::vec3 &ambientLighting) {
@@ -507,21 +471,28 @@ void sphereRasterisedSceneWithGourandShading(std::vector<ModelTriangle> &modelSp
         for (int x = 0; x < WIDTH; x++) {
             glm::vec3 rayDirection = pixelToDirection(x, y);
             RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelSphere, cameraPosition, rayDirection);
-            Colour colour = closestIntersection.intersectedTriangle.colour;
-            glm::vec3 intersectionPoint = closestIntersection.intersectionPoint;
 
             if (closestIntersection.distanceFromCamera != INFINITY) {
-               auto &triangle = closestIntersection.intersectedTriangle;
-               glm::vec3 barycentric = barycentricCoordinates(x, y, triangle);
+                auto &triangle = closestIntersection.intersectedTriangle;
+                Colour colour = triangle.colour;
+                glm::vec3 intersectionPoint = closestIntersection.intersectionPoint;
 
-               glm::vec3 interpolatedNormal = glm::normalize(barycentric.x * vertexNormals(triangle.vertices[0], modelSphere) +
-                       barycentric.y * vertexNormals(triangle.vertices[1], modelSphere) + barycentric.z * vertexNormals(triangle.vertices[2], modelSphere));
+                glm::vec3 v0 = triangle.vertices[0];
+                glm::vec3 v1 = triangle.vertices[1];
+                glm::vec3 v2 = triangle.vertices[2];
+                glm::vec3 n0 = vertexNormals(v0, modelSphere);
+                glm::vec3 n1 = vertexNormals(v1, modelSphere);
+                glm::vec3 n2 = vertexNormals(v2, modelSphere);
 
-                float interpolatedIntensity = proximityLighting(intersectionPoint) *
-                                              angleOfIncidenceLighting(intersectionPoint, interpolatedNormal) +
-                                              specularLighting(intersectionPoint, interpolatedNormal);
+                // Barycentric Coordinates
+                float det = ((v1.y - v2.y) * (v0.x - v2.x)) + ((v2.x - v1.x) * (v0.y - v2.y));
+                float u = (((v1.y - v2.y) * (intersectionPoint.x - v2.x)) + ((v2.x - v1.x) * (intersectionPoint.y - v2.y))) / det;
+                float v = (((v2.y - v0.y) * (intersectionPoint.x - v2.x)) + ((v0.x - v2.x) * (intersectionPoint.y - v2.y))) / det;
+                float w = 1 - u - v;
+                glm::vec3 pointNormal = u * n0 + v * n1 + w * n2;
 
-                Colour combinedColour = colourForLighting(colour, interpolatedIntensity, ambientLighting);
+                float interpolatedLighting = proximityLighting(intersectionPoint) * angleOfIncidenceLighting(intersectionPoint, pointNormal) + specularLighting(intersectionPoint, pointNormal);
+                Colour combinedColour = colourForLighting(colour, interpolatedLighting, ambientLighting);
                 window.setPixelColour(x, y, colourPalette(combinedColour));
             }
         }
