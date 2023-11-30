@@ -13,7 +13,6 @@
 #include <glm/glm.hpp>
 #include <map>
 #include <algorithm>
-#include <unordered_map>
 
 #define WIDTH 320
 #define HEIGHT 240
@@ -327,7 +326,7 @@ float angleOfIncidenceLighting(glm::vec3 point, glm::vec3 normal) {
 float specularLighting(glm::vec3 point, glm::vec3 normal) {
     glm::vec3 cameraDirection = glm::normalize(cameraPosition - point);
     glm::vec3 lightDirection = glm::normalize(lightPosition - point);
-    glm::vec3 reflectionDirection = glm::reflect(-lightDirection, normal);
+    glm::vec3 reflectionDirection = lightDirection - (2.0f * normal * (glm::dot(lightDirection, normal)));
     float specularIntensity = glm::pow(std::max(glm::dot(cameraDirection, reflectionDirection), 0.0f), 32);
     return specularIntensity;
 }
@@ -476,6 +475,23 @@ glm::vec3 interpolateNormals(ModelTriangle &triangle, glm::vec3 &intersectionPoi
     return glm::normalize(pointNormal);
 }
 
+glm::vec3 barycentricCoordinates(glm::vec3 point, glm::vec3 a, glm::vec3 b, glm::vec3 c) {
+    glm::vec3 v0 = b - a;
+    glm::vec3 v1 = c - a;
+    glm::vec3 v2 = point - a;
+    float d00 = glm::dot(v0, v0);
+    float d01 = glm::dot(v0, v1);
+    float d11 = glm::dot(v1, v1);
+    float d20 = glm::dot(v2, v0);
+    float d21 = glm::dot(v2, v1);
+    float det = d00 * d11 - d01 * d01;
+    float v = (d11 * d20 - d01 * d21) / det;
+    float w = (d00 * d21 - d01 * d20) / det;
+    float u = 1.0f - v - w;
+
+    return glm::vec3(u, v, w);
+}
+
 std::vector<glm::vec3> vertexLighting(std::vector<ModelTriangle> &modelSphere) {
     std::vector<glm::vec3> vertexLighting(modelSphere.size() * 3);
     int vertexIndex = 0;
@@ -499,17 +515,14 @@ glm::vec3 interpolateLighting(ModelTriangle &triangle, glm::vec3 &intersectionPo
     glm::vec3 v2 = triangle.vertices[2];
 
     // Barycentric Coordinates
-    float det = glm::length(glm::cross(v1 - v0, v2 - v0));
-    float u = glm::length(glm::cross(v1 - intersectionPoint, v2 - intersectionPoint)) / det;
-    float v = glm::length(glm::cross(v2 - intersectionPoint, v0 - intersectionPoint)) / det;
-    float w = 1.0f - u - v;
+    glm::vec3 barycentric = barycentricCoordinates(intersectionPoint, v0, v1, v2);
 
-    glm::vec3 lighting = u * vertexLighting[vertexIndex] + v * vertexLighting[vertexIndex + 1] + w * vertexLighting[vertexIndex + 2];
+    glm::vec3 lighting = barycentric.x * vertexLighting[vertexIndex] + barycentric.y * vertexLighting[vertexIndex + 1] + barycentric.z * vertexLighting[vertexIndex + 2];
 
     return lighting;
 }
 
-void sphereWithGourandShading(std::vector<ModelTriangle> &modelSphere, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+void sphereWithGouraudShading(std::vector<ModelTriangle> &modelSphere, std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
     std::vector<glm::vec3> verticesLighting = vertexLighting(modelSphere);
 
     for (int y = 0; y < HEIGHT; y++) {
@@ -537,6 +550,7 @@ void sphereWithPhongShading(std::vector<ModelTriangle> &modelSphere, std::vector
         for (int x = 0; x < WIDTH; x++) {
             glm::vec3 rayDirection = pixelToDirection(x, y);
             RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelSphere, cameraPosition, rayDirection);
+            // glm::vec3 lightDirection = glm::normalize(closestIntersection.intersectionPoint - lightPosition);
 
             if (closestIntersection.distanceFromCamera != INFINITY) {
                 auto &triangle = closestIntersection.intersectedTriangle;
@@ -649,12 +663,12 @@ void drawSphereWithFlat(DrawingWindow &window) {
     sphereWithFlat(readSphere, depthBuffer, window);
 }
 
-void drawSphereWithGourandShading (DrawingWindow &window) {
+void drawSphereWithGouraudShading (DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
     std::vector<ModelTriangle> readSphere = readSphereOBJ("./src/sphere.obj", readPalette, 0.50f);
-    sphereWithGourandShading(readSphere, depthBuffer, window);
+    sphereWithGouraudShading(readSphere, depthBuffer, window);
 }
 
 void drawSphereWithPhongShading (DrawingWindow &window) {
@@ -758,7 +772,7 @@ int main(int argc, char *argv[]) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, window);
         // drawSphereWithFlat(window);
-        // drawSphereWithGourandShading(window);
+        // drawSphereWithGouraudShading(window);
         // drawSphereWithPhongShading(window);
 
         /*
