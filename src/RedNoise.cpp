@@ -4,8 +4,6 @@
 #include <DrawingWindow.h>
 #include <ModelTriangle.h>
 #include <RayTriangleIntersection.h>
-#include <TextureMap.h>
-#include <TexturePoint.h>
 #include <Utils.h>
 #include <fstream>
 #include <iostream>
@@ -22,8 +20,8 @@ float focalLength = 2.0f;
 bool orbitAnimation = true;
 float ambientLighting = 0.2f;
 glm::mat3 cameraOrientation = glm::mat3(1.0);
-glm::vec3 cameraPosition = glm::vec3(0.0f, 0.7f, 2.5f);
 glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
+glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 4.0f);
 
 int roundToInt(float value) {
     return int(std::round(value));
@@ -331,6 +329,16 @@ float specularLighting(glm::vec3 point, glm::vec3 normal) {
     return specularIntensity;
 }
 
+std::vector<glm::vec3> calculateLightPoints(glm::vec3 lightPosition, int numberPoints, float radius) {
+    std::vector<glm::vec3> lightPoints;
+    for (int i = 0; i < numberPoints; i++) {
+        float angle = (2 * M_PI / numberPoints) * i;
+        glm::vec3 balance(radius * cos(angle), 0, radius * sin(angle));
+        lightPoints.push_back(lightPosition + balance);
+    }
+    return lightPoints;
+}
+
 glm::vec3 pixelToDirection(int x, int y) {
     float xNormalise = (x - WIDTH / 2.0f) * (1.0f / (HEIGHT * 2.0f / 3.0f));
     float yNormalise = (y - HEIGHT / 2.0f) * (1.0f / (HEIGHT * 2.0f / 3.0f));
@@ -338,35 +346,43 @@ glm::vec3 pixelToDirection(int x, int y) {
     return glm::normalize(pixelPosition - cameraPosition);
 }
 
-void rasterisedScene(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+void rasterisedSceneWithSoftShadow(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    std::vector<glm::vec3> lightPoints = calculateLightPoints(lightPosition, 10, 0.1f);
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
-            // converting from 2D pixel into 3D direction
             glm::vec3 rayDirection = pixelToDirection(x, y);
-            RayTriangleIntersection intersectionPoint = getClosestValidIntersection(modelTriangle, cameraPosition, rayDirection);
-            if (intersectionPoint.distanceFromCamera != INFINITY) {
-                uint32_t colour = colourPalette(intersectionPoint.intersectedTriangle.colour);
-                window.setPixelColour(x, y, colour);
-            }
-        }
-    }
-}
-
-void rasterisedSceneWithShadow(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-            // converting from 2D pixel into 3D direction
-            glm::vec3 rayDirection = pixelToDirection(x, y);
-            RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelTriangle, cameraPosition,rayDirection);
-
-            glm::vec3 lightDirection = glm::normalize(closestIntersection.intersectionPoint - lightPosition);
-            RayTriangleIntersection lightIntersection = getClosestValidIntersection(modelTriangle, lightPosition, lightDirection);
-
+            RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelTriangle, cameraPosition, rayDirection);
+            Colour colour = closestIntersection.intersectedTriangle.colour;
+            glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
+            glm::vec3 intersectionPoint = closestIntersection.intersectionPoint;
             if (closestIntersection.distanceFromCamera != INFINITY) {
-                if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
-                    uint32_t colour = colourPalette(closestIntersection.intersectedTriangle.colour);
-                    window.setPixelColour(x, y, colour);
+                float shadowFactor = 0.0f;
+                for (glm::vec3 &lightPoint : lightPoints) {
+                    glm::vec3 lightRay = lightPoint - intersectionPoint;
+                    float lightDistance = glm::length(lightRay);
+                    glm::vec3 lightDirection = glm::normalize(lightRay);
+                    glm::vec3 shadowRay = intersectionPoint + lightDirection * 0.001f;
+                    RayTriangleIntersection shadowIntersection = getClosestValidIntersection(modelTriangle, shadowRay, lightDirection);
+                    if (shadowIntersection.distanceFromCamera < lightDistance && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
+                        shadowFactor += 0.5;
+                    } else {
+                        shadowFactor += 1.0f;
+                    }
                 }
+
+                float averageShadowFactor = shadowFactor / lightPoints.size();
+
+                float proximityIntensity = proximityLighting(intersectionPoint);
+                float diffuseIntensity = angleOfIncidenceLighting(intersectionPoint, normal);
+                float specularIntensity = specularLighting(intersectionPoint, normal);
+
+                glm::vec3 colourVec3 = glm::vec3(colour.red, colour.green, colour.blue);
+                glm::vec3 lightingVec3 = (colourVec3 * (proximityIntensity * diffuseIntensity) + glm::vec3(255.0f) * specularIntensity) * averageShadowFactor;
+                glm::vec3 ambient = colourVec3 * glm::vec3(ambientLighting);
+                glm::vec3 lightingColour = glm::clamp(lightingVec3 + ambient, 0.0f, 255.0f);
+
+                Colour combinedColour = Colour(lightingColour.x, lightingColour.y, lightingColour.z);
+                window.setPixelColour(x, y, colourPalette(combinedColour));
             }
         }
     }
@@ -404,6 +420,40 @@ void rasterisedSceneWithLighting(std::vector<ModelTriangle> &modelTriangle, std:
 
                 Colour combinedColour = Colour(lightingColour.x, lightingColour.y, lightingColour.z);
                 window.setPixelColour(x, y, colourPalette(combinedColour));
+            }
+        }
+    }
+}
+
+void rasterisedSceneWithShadow(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            // converting from 2D pixel into 3D direction
+            glm::vec3 rayDirection = pixelToDirection(x, y);
+            RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelTriangle, cameraPosition,rayDirection);
+
+            glm::vec3 lightDirection = glm::normalize(closestIntersection.intersectionPoint - lightPosition);
+            RayTriangleIntersection lightIntersection = getClosestValidIntersection(modelTriangle, lightPosition, lightDirection);
+
+            if (closestIntersection.distanceFromCamera != INFINITY) {
+                if (closestIntersection.triangleIndex == lightIntersection.triangleIndex) {
+                    uint32_t colour = colourPalette(closestIntersection.intersectedTriangle.colour);
+                    window.setPixelColour(x, y, colour);
+                }
+            }
+        }
+    }
+}
+
+void rasterisedScene(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            // converting from 2D pixel into 3D direction
+            glm::vec3 rayDirection = pixelToDirection(x, y);
+            RayTriangleIntersection intersectionPoint = getClosestValidIntersection(modelTriangle, cameraPosition, rayDirection);
+            if (intersectionPoint.distanceFromCamera != INFINITY) {
+                uint32_t colour = colourPalette(intersectionPoint.intersectedTriangle.colour);
+                window.setPixelColour(x, y, colour);
             }
         }
     }
@@ -647,6 +697,14 @@ void drawShadow(DrawingWindow &window) {
     rasterisedSceneWithShadow(modelTriangle, depthBuffer, window);
 }
 
+void drawSoftShadow(DrawingWindow &window) {
+    window.clearPixels();
+    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
+    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
+    std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35f);
+    rasterisedSceneWithSoftShadow(modelTriangle, depthBuffer, window);
+}
+
 void drawLighting(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
@@ -663,7 +721,7 @@ void drawSphereWithFlat(DrawingWindow &window) {
     sphereWithFlat(readSphere, depthBuffer, window);
 }
 
-void drawSphereWithGouraudShading (DrawingWindow &window) {
+void drawSphereWithGouraudShading(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
@@ -671,7 +729,7 @@ void drawSphereWithGouraudShading (DrawingWindow &window) {
     sphereWithGouraudShading(readSphere, depthBuffer, window);
 }
 
-void drawSphereWithPhongShading (DrawingWindow &window) {
+void drawSphereWithPhongShading(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
     std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
@@ -771,6 +829,7 @@ int main(int argc, char *argv[]) {
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, window);
+        drawSoftShadow(window);
         // drawSphereWithFlat(window);
         // drawSphereWithGouraudShading(window);
         // drawSphereWithPhongShading(window);
