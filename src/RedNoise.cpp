@@ -281,7 +281,7 @@ void cameraRotation(float angleX, float angleY) {
     lookAt();
 }
 
-RayTriangleIntersection getClosestValidIntersection(std::vector<ModelTriangle> &modelTriangle, glm::vec3 &cameraPosition, glm::vec3 rayDirection) {
+RayTriangleIntersection getClosestValidIntersection(std::vector<ModelTriangle> &modelTriangle, glm::vec3 &cameraPosition, glm::vec3 &rayDirection) {
     RayTriangleIntersection closestIntersection;
     closestIntersection.distanceFromCamera = INFINITY;
 
@@ -306,6 +306,46 @@ RayTriangleIntersection getClosestValidIntersection(std::vector<ModelTriangle> &
         }
     }
     return closestIntersection;
+}
+
+RayTriangleIntersection getClosestValidIntersectionMirror(std::vector<ModelTriangle> &modelTriangle, glm::vec3 &cameraPosition, glm::vec3 &rayDirection) {
+    RayTriangleIntersection closestIntersection;
+    closestIntersection.distanceFromCamera = INFINITY;
+
+    for (size_t i = 0; i < modelTriangle.size(); i++) {
+        ModelTriangle triangle = modelTriangle[i];
+        glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+        glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+        glm::vec3 SPVector = cameraPosition - triangle.vertices[0];
+        glm::mat3 DEMatrix(-rayDirection, e0, e1);
+        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+
+        float t = possibleSolution[0];
+        float u = possibleSolution[1];
+        float v = possibleSolution[2];
+
+        if (triangle.colour.name != "Magenta" && u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0 && (u + v) <= 1.0) {
+            if (t > 0 && t < closestIntersection.distanceFromCamera) {
+                closestIntersection.distanceFromCamera = t;
+                glm::vec3 r = cameraPosition + t * rayDirection;
+                closestIntersection.intersectionPoint = r;
+                closestIntersection = RayTriangleIntersection(r, t, triangle, i);
+            }
+        }
+    }
+    return closestIntersection;
+}
+
+Colour mixColours(Colour &originalColour, Colour &reflectionColour, float reflectionPower) {
+    int red = originalColour.red * (1 - reflectionPower) + reflectionColour.red * reflectionPower;
+    int green = originalColour.green * (1 - reflectionPower) + reflectionColour.green * reflectionPower;
+    int blue  = originalColour.blue * (1 - reflectionPower) + reflectionColour.blue * reflectionPower;
+
+    red = std::min(std::max(red, 0), 255);
+    green = std::min(std::max(red, 0), 255);
+    blue = std::min(std::max(red, 0), 255);
+
+    return Colour(red, green, blue);
 }
 
 float proximityLighting(glm::vec3 point) {
@@ -346,8 +386,9 @@ glm::vec3 pixelToDirection(int x, int y) {
     return glm::normalize(pixelPosition - cameraPosition);
 }
 
-void rasterisedSceneWithSoftShadow(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
-    std::vector<glm::vec3> lightPoints = calculateLightPoints(lightPosition, 10, 0.1f);
+void rasterisedSceneWithMirrorReflection(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    std::vector<glm::vec3> lightPoints = calculateLightPoints(lightPosition, 4, 0.1f);
+    float reflectionPower = 1.0f;
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             glm::vec3 rayDirection = pixelToDirection(x, y);
@@ -355,8 +396,10 @@ void rasterisedSceneWithSoftShadow(std::vector<ModelTriangle> &modelTriangle,  s
             Colour colour = closestIntersection.intersectedTriangle.colour;
             glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
             glm::vec3 intersectionPoint = closestIntersection.intersectionPoint;
+
             if (closestIntersection.distanceFromCamera != INFINITY) {
                 float shadowFactor = 0.0f;
+
                 for (glm::vec3 &lightPoint : lightPoints) {
                     glm::vec3 lightRay = lightPoint - intersectionPoint;
                     float lightDistance = glm::length(lightRay);
@@ -371,7 +414,58 @@ void rasterisedSceneWithSoftShadow(std::vector<ModelTriangle> &modelTriangle,  s
                 }
 
                 float averageShadowFactor = shadowFactor / lightPoints.size();
+                float proximityIntensity = proximityLighting(intersectionPoint);
+                float diffuseIntensity = angleOfIncidenceLighting(intersectionPoint, normal);
+                float specularIntensity = specularLighting(intersectionPoint, normal);
+                glm::vec3 colourVec3 = glm::vec3(colour.red, colour.green, colour.blue);
+                glm::vec3 lightingVec3 = (colourVec3 * (proximityIntensity * diffuseIntensity) + glm::vec3(255.0f) * specularIntensity) * averageShadowFactor;
+                glm::vec3 ambient = colourVec3 * glm::vec3(ambientLighting);
+                glm::vec3 lightingColour = glm::clamp(lightingVec3 + ambient, 0.0f, 255.0f);
+                Colour combinedColour = Colour(lightingColour.x, lightingColour.y, lightingColour.z);
 
+                if (closestIntersection.intersectedTriangle.colour.name == "Magenta") {
+                    glm::vec3 reflectionDirection = glm::normalize(rayDirection - 2.0f * normal * glm::dot(rayDirection, normal));
+                    glm::vec3 reflectionOrigin = intersectionPoint + reflectionDirection * 0.001f;
+                    RayTriangleIntersection reflectionIntersection = getClosestValidIntersectionMirror(modelTriangle, reflectionOrigin, reflectionDirection);
+
+                    if (reflectionIntersection.distanceFromCamera != INFINITY) {
+                        Colour reflectionColour = reflectionIntersection.intersectedTriangle.colour;
+                        combinedColour = mixColours(combinedColour, reflectionColour, reflectionPower);
+                    }
+                }
+                window.setPixelColour(x, y, colourPalette(combinedColour));
+            }
+        }
+    }
+}
+
+void rasterisedSceneWithSoftShadow(std::vector<ModelTriangle> &modelTriangle,  std::vector<std::vector<float>> &depthBuffer, DrawingWindow &window) {
+    std::vector<glm::vec3> lightPoints = calculateLightPoints(lightPosition, 10, 0.1f);
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            glm::vec3 rayDirection = pixelToDirection(x, y);
+            RayTriangleIntersection closestIntersection = getClosestValidIntersection(modelTriangle, cameraPosition, rayDirection);
+            Colour colour = closestIntersection.intersectedTriangle.colour;
+            glm::vec3 normal = modelTriangleNormal(closestIntersection.intersectedTriangle);
+            glm::vec3 intersectionPoint = closestIntersection.intersectionPoint;
+
+            if (closestIntersection.distanceFromCamera != INFINITY) {
+                float shadowFactor = 0.0f;
+
+                for (glm::vec3 &lightPoint : lightPoints) {
+                    glm::vec3 lightRay = lightPoint - intersectionPoint;
+                    float lightDistance = glm::length(lightRay);
+                    glm::vec3 lightDirection = glm::normalize(lightRay);
+                    glm::vec3 shadowRay = intersectionPoint + lightDirection * 0.001f;
+                    RayTriangleIntersection shadowIntersection = getClosestValidIntersection(modelTriangle, shadowRay, lightDirection);
+                    if (shadowIntersection.distanceFromCamera < lightDistance && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
+                        shadowFactor += 0.5;
+                    } else {
+                        shadowFactor += 1.0f;
+                    }
+                }
+
+                float averageShadowFactor = shadowFactor / lightPoints.size();
                 float proximityIntensity = proximityLighting(intersectionPoint);
                 float diffuseIntensity = angleOfIncidenceLighting(intersectionPoint, normal);
                 float specularIntensity = specularLighting(intersectionPoint, normal);
@@ -705,6 +799,14 @@ void drawSoftShadow(DrawingWindow &window) {
     rasterisedSceneWithSoftShadow(modelTriangle, depthBuffer, window);
 }
 
+void drawMirrorReflection(DrawingWindow &window) {
+    window.clearPixels();
+    std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
+    std::map<std::string, Colour> readPalette = readMTL("./src/cornell-box.mtl");
+    std::vector<ModelTriangle> modelTriangle = readOBJ("./src/cornell-box.obj", readPalette, 0.35f);
+    rasterisedSceneWithMirrorReflection(modelTriangle, depthBuffer, window);
+}
+
 void drawLighting(DrawingWindow &window) {
     window.clearPixels();
     std::vector<std::vector<float>> depthBuffer = initialiseDepthBuffer(WIDTH, HEIGHT);
@@ -829,7 +931,7 @@ int main(int argc, char *argv[]) {
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, window);
-        drawSoftShadow(window);
+        drawMirrorReflection(window);
         // drawSphereWithFlat(window);
         // drawSphereWithGouraudShading(window);
         // drawSphereWithPhongShading(window);
