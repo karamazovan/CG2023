@@ -342,8 +342,8 @@ Colour mixColours(Colour &originalColour, Colour &reflectionColour, float reflec
     int blue  = originalColour.blue * (1 - reflectionPower) + reflectionColour.blue * reflectionPower;
 
     red = std::min(std::max(red, 0), 255);
-    green = std::min(std::max(red, 0), 255);
-    blue = std::min(std::max(red, 0), 255);
+    green = std::min(std::max(green, 0), 255);
+    blue = std::min(std::max(blue, 0), 255);
 
     return Colour(red, green, blue);
 }
@@ -433,6 +433,7 @@ void rasterisedSceneWithMirrorReflection(std::vector<ModelTriangle> &modelTriang
                         combinedColour = mixColours(combinedColour, reflectionColour, reflectionPower);
                     }
                 }
+
                 window.setPixelColour(x, y, colourPalette(combinedColour));
             }
         }
