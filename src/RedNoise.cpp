@@ -15,13 +15,19 @@
 #define WIDTH 640
 #define HEIGHT 480
 
-int callDraw = 0;
-float focalLength = 2.0f;
-bool orbitAnimation = false;
-float ambientLighting = 0.2f;
-glm::mat3 cameraOrientation = glm::mat3(1.0);
-glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
+// Cornell-box
 glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 4.0f);
+glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
+
+// Sphere
+// glm::vec3 cameraPosition = glm::vec3(0.0f, 0.75f, 2.2f);
+// glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
+
+glm::mat3 cameraOrientation = glm::mat3(1.0);
+float focalLength = 2.0f;
+float ambientLighting = 0.2f;
+bool orbitAnimation = false;
+int callDraw = 0;
 
 int roundToInt(float value) {
     return int(std::round(value));
@@ -212,7 +218,7 @@ CanvasPoint getCanvasIntersectionPoint(glm::vec3 vertexPosition, float frame) {
     float u = (-1) * (focalLength * ((transposition.x) / (transposition.z)));
     float v = (focalLength * ((transposition.y) / (transposition.z)));
     // rounding to ensure whole pixels
-    CanvasPoint result = CanvasPoint(std::round(u * frame + WIDTH/2.0f), std::round(v * frame + HEIGHT/2.0f));
+    CanvasPoint result = CanvasPoint(std::round(u * frame + WIDTH / 2.0f), std::round(v * frame + HEIGHT / 2.0f));
     result.depth = -transposition.z;
     return result;
 }
@@ -465,10 +471,26 @@ void rasterisedSceneWithGlassRefraction(std::vector<ModelTriangle> &modelTriangl
                     glm::vec3 refractionRay = calculateRefraction(glass / air, rayDirection, normal);
                     RayTriangleIntersection refractionIntersection = getClosestValidIntersectionRefraction(modelTriangle, intersectionPoint, refractionRay);
                     if (refractionIntersection.distanceFromCamera != INFINITY && refractionIntersection.distanceFromCamera > 0.001f) {
+                        float refractionShadowFactor = 0.0f;
+                        for (glm::vec3 &lightPoint : lightPoints) {
+                            glm::vec3 lightRay = lightPoint - refractionIntersection.intersectionPoint;
+                            float lightDistance = glm::length(lightRay);
+                            glm::vec3 lightDirection = glm::normalize(lightRay);
+                            glm::vec3 shadowRay = refractionIntersection.intersectionPoint + lightDirection * 0.001f;
+                            RayTriangleIntersection shadowIntersection = getClosestValidIntersection(modelTriangle, shadowRay, lightDirection);
+                            if (shadowIntersection.distanceFromCamera < lightDistance && shadowIntersection.triangleIndex != closestIntersection.triangleIndex) {
+                                refractionShadowFactor += 0.5f;
+                            } else {
+                                refractionShadowFactor += 1.0f;
+                            }
+                        }
+                        refractionShadowFactor /= lightPoints.size();
                         float fresnel = calculateFresnel(glm::dot(-rayDirection, normal), glass / air);
                         float refraction = 1.0f - fresnel;
                         Colour refractionColour = refractionIntersection.intersectedTriangle.colour;
-                        combinedColour = mixColours(combinedColour, refractionColour, refraction);
+                        glm::vec3 refractionLighting = calculateLighting(refractionIntersection.intersectionPoint, normal, refractionColour) * refractionShadowFactor;
+                        Colour reflectionLightingColour = Colour(refractionLighting.x, refractionLighting.y, refractionLighting.z);
+                        combinedColour = mixColours(combinedColour, reflectionLightingColour, refraction);
                     }
                 }
                 window.setPixelColour(x, y, colourPalette(combinedColour));
@@ -1005,7 +1027,6 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
         }
         else if (event.key.keysym.sym == SDLK_m) {
             callDraw = 10;
-
         }
         else if (event.key.keysym.sym == SDLK_g) {
             callDraw = 11;
@@ -1018,19 +1039,12 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 
 int main(int argc, char *argv[]) {
     DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
-
     SDL_Event event;
-
     while (true) {
         // We MUST poll for events - otherwise the window will freeze !
         if (window.pollForInputEvents(event)) handleEvent(event, window);
-
         if (callDraw == 1) {
             drawWireframe(window);
-            /*
-            std::string fileName = "saveppm/output.ppm";
-            savePPM(fileName, window);
-            */
         }
         if (callDraw == 2) {
             drawRasterised(window);
@@ -1061,8 +1075,9 @@ int main(int argc, char *argv[]) {
         }
         if (callDraw == 11) {
             drawRefraction(window);
+            // std::string fileName = "saveppm/output.ppm";
+            // savePPM(fileName, window);
         }
-
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
     }
