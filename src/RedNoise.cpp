@@ -20,12 +20,10 @@
 // Cornell-box
 glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 4.0f);
 glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
-
 // Sphere
 // glm::vec3 cameraPosition = glm::vec3(0.0f, 0.75f, 2.2f);
 // glm::vec3 lightPosition = glm::vec3(0.0f, 0.5f, 0.5f);
-
-glm::mat3 cameraOrientation = glm::mat3(1.0);
+glm::mat3 cameraOrientation = glm::mat3(1.0f);
 float focalLength = 2.0f;
 float ambientLighting = 0.2f;
 bool orbitAnimation = false;
@@ -390,7 +388,7 @@ float specularLighting(glm::vec3 point, glm::vec3 normal) {
     glm::vec3 cameraDirection = glm::normalize(cameraPosition - point);
     glm::vec3 lightDirection = glm::normalize(lightPosition - point);
     glm::vec3 reflectionDirection = lightDirection - (2.0f * normal * (glm::dot(lightDirection, normal)));
-    float specularIntensity = glm::pow(std::max(glm::dot(cameraDirection, reflectionDirection), 0.0f), 256);
+    float specularIntensity = glm::pow(std::max(glm::dot(cameraDirection, reflectionDirection), 0.0f), 64);
     return specularIntensity;
 }
 
@@ -1137,6 +1135,8 @@ int main(int argc, char *argv[]) {
         if (window.pollForInputEvents(event)) handleEvent(event, window);
         if (callDraw == 1) {
             drawWireframe(window);
+            // std::string fileName = "saveppm/output.ppm";
+            // savePPM(fileName, window);
         }
         if (callDraw == 2) {
             drawRasterised(window);
@@ -1167,8 +1167,6 @@ int main(int argc, char *argv[]) {
         }
         if (callDraw == 11) {
             drawRefraction(window);
-            // std::string fileName = "saveppm/output.ppm";
-            // savePPM(fileName, window);
         }
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
